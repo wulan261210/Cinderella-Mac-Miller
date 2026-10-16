@@ -83,15 +83,16 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 <!-- LIRIK (tersembunyi, tidak tampil di halaman)
      Format: menit:detik | teks | warna | gambar (opsional)
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
-     atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot. -->
+     atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
+     Tulis kata ganti di awal kolom warna supaya warnanya berganti-ganti terus. -->
 <textarea id="lyrics" hidden>
-00:01 | Cinderella Mac-Miller | #d9d2bd #e8d44d
+00:01 | Cinderella Mac-Miller | #d9d2bd #f5f0df
+00:08 | I been waitin' | #e8d44d
+00:09 | all night for this | #d9d2bd
+00:11 | moment | #d9d2bd #f5f0df #e8d44d #d9d2bd #e8d44d #f5f0df
 00:13 | I been waitin' | #f5f0df
-00:14 | all night for this | #d9d2bd
-00:15 | moment | #d9d2bd #f5f0df #e8d44d #d9d2bd #e8d44d #f5f0df
-00:17 | I been waitin' | #f5f0df
-00:18 | all year for this | #e8d44d
-00:19 | moment | #d9d2bd #e8d44d #f5f0df #d9d2bd #e8d44d #f5f0df
+00:14 | all year for this | #e8d44d
+00:16 | moment | #d9d2bd #e8d44d #f5f0df #d9d2bd #e8d44d #f5f0df
 </textarea>
 
 <div id="bar">
@@ -106,6 +107,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 const AUDIO_SRC = "SnapTik_Cinderella_Mac_Miller_with_emm_macmiller.mp4"; // nama file lagu di repo
 const DEFAULT_COLOR = "#f5f0df";   // warna teks bawaan
 const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
+const KATA_BERGANTI = ["moment"];  // baris yang teksnya persis kata ini, warnanya berganti-ganti otomatis
+const KECEPATAN_WARNA = 6;         // makin besar makin cepat berganti
 const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
 const SCRAMBLE = "abcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=";
 // ========================
@@ -160,6 +163,7 @@ function parse(txt) {
         t: +m[1] * 60 + +m[2],
         text: p[1] || "",
         pal,
+        anim: /\bganti\b/i.test(p[2] || "") || KATA_BERGANTI.includes((p[1] || "").trim().toLowerCase()),
         img: p[3] && !p[3].startsWith("#") ? p[3] : "",
         imgEl: null
       };
@@ -182,8 +186,9 @@ function applyLyrics() {
 }
 
 // ---------- pewarnaan teks ----------
+// Tulis kata ganti di kolom warna = warna berputar terus (animasi)
 // 1 warna = semua huruf | jumlah warna = jumlah huruf -> per huruf | selain itu -> per kata
-function colorize(text, pal) {
+function colorize(text, pal, shift) {
   let plain = "";
   const hl = [];
   text.split(/(\[[^\]]*\])/).forEach(s => {
@@ -203,7 +208,8 @@ function colorize(text, pal) {
       c = prev;
     } else {
       if (!inWord) { wi++; inWord = true; }
-      c = pal.length === 1 ? pal[0] : pal.length === letters ? pal[li] : pal[wi % pal.length];
+      c = shift !== undefined ? pal[(li + shift) % pal.length]
+        : pal.length === 1 ? pal[0] : pal.length === letters ? pal[li] : pal[wi % pal.length];
       li++;
     }
     if (hl[i]) c = HIGHLIGHT;
@@ -239,7 +245,7 @@ function drawEntry(e, alpha) {
   const hasImg = e.imgEl && e.imgEl.naturalWidth;
   const y = hasImg ? VH * 0.26 : VH * 0.5;
 
-  const parts = colorize(e.text, e.pal);
+  const parts = colorize(e.text, e.pal, e.anim ? Math.floor(now() * KECEPATAN_WARNA) : undefined);
 
   let size = VH * 0.2;
   const setFont = () => (octx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`);
