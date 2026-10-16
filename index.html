@@ -40,10 +40,9 @@ canvas#view {
   padding: 10px 12px;
   background: linear-gradient(transparent, rgba(0,0,0,.9));
   z-index: 5;
-  flex-wrap: wrap;
 }
 
-button, label.btn {
+button {
   background: #111;
   color: var(--fg);
   border: 1px solid #444;
@@ -53,33 +52,11 @@ button, label.btn {
   cursor: pointer;
   border-radius: 4px;
 }
-button:hover, label.btn:hover { border-color: var(--accent); color: var(--accent); }
+button:hover { border-color: var(--accent); color: var(--accent); }
 
 input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
-input[type=file] { display: none; }
 #time { font-size: 12px; opacity: .7; min-width: 90px; }
 
-#editor {
-  position: fixed;
-  left: 0; right: 0; bottom: 52px;
-  background: rgba(0,0,0,.92);
-  border-top: 1px solid #333;
-  padding: 12px;
-  z-index: 4;
-  display: none;
-}
-#editor.open { display: block; }
-#editor textarea {
-  width: 100%;
-  height: 32vh;
-  background: #0a0a0a;
-  color: var(--fg);
-  border: 1px solid #333;
-  font: 13px/1.5 Consolas, "Courier New", monospace;
-  padding: 8px;
-  resize: vertical;
-}
-#editor small { display: block; opacity: .6; margin-top: 6px; }
 #hint {
   position: fixed;
   top: 12px; left: 50%;
@@ -103,27 +80,22 @@ input[type=file] { display: none; }
 <div id="hint"></div>
 <audio id="audio" preload="auto"></audio>
 
-<div id="editor">
-<textarea id="lyrics" spellcheck="false">// Tempel liriknya di bawah ini, satu baris per baris, lalu klik "Sync ketuk".
-// Atau tulis manual: menit:detik | teks | warna (opsional) | gambar (opsional)
-// Kata dalam [kurung siku] memakai warna sorot.
-00:01 | Cinderella | #d9d2bd Mac-Miller | #f5f0df
-00:08 |I been waitin' |  #e8d44d
-00:09 | all night for this  |  #d9d2bd
-00:11 | moment | #d9d2bd #f5f0df  #e8d44d #d9d2bd #e8d44d  #f5f0df
+<!-- LIRIK (tersembunyi, tidak tampil di halaman)
+     Format: menit:detik | teks | warna | gambar (opsional)
+     Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
+     atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot. -->
+<textarea id="lyrics" hidden>
+00:01 | Cinderella Mac-Miller | #d9d2bd #f5f0df
+00:08 | I been waitin' | #e8d44d
+00:09 | all night for this | #d9d2bd
+00:11 | moment | #d9d2bd #f5f0df #e8d44d #d9d2bd #e8d44d #f5f0df
 00:13 | I been waitin' | #f5f0df
 00:14 | all year for this | #e8d44d
-00:16 | moment | #d9d2bd #e8d44d  #f5f0df #d9d2bd #e8d44d  #f5f0df </textarea>
-<button id="apply">Terapkan</button>
-<button id="syncbtn">Sync ketuk</button>
-<small>Gambar (png/jpg) taruh di repo yang sama, lalu tulis nama filenya di kolom ke-4.</small>
-<small>Cara cepat: tempel lirik satu baris per baris (tanpa waktu), klik "Sync ketuk", lalu tekan Enter atau ketuk layar tepat saat tiap baris mulai dinyanyikan. Backspace untuk mengulang satu baris.</small>
-</div>
+00:16 | moment | #d9d2bd #e8d44d #f5f0df #d9d2bd #e8d44d #f5f0df
+</textarea>
 
 <div id="bar">
   <button id="play">▶ Mulai</button>
-    <input type="file" id="file" accept="audio/*">
-  </label>
   <input type="range" id="seek" min="0" max="100" step="0.1" value="0">
   <span id="time">0:00</span>
   <button id="full">⛶</button>
@@ -131,7 +103,7 @@ input[type=file] { display: none; }
 
 <script>
 // ====== PENGATURAN ======
-const AUDIO_SRC ="SnapTik_Cinderella_Mac_Miller_with_emm_macmiller.mp4";      // taruh file lagu di repo dengan nama ini (opsional)
+const AUDIO_SRC = "SnapTik_Cinderella_Mac_Miller_with_emm_macmiller.mp4"; // nama file lagu di repo
 const DEFAULT_COLOR = "#f5f0df";   // warna teks bawaan
 const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
 const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
@@ -180,11 +152,15 @@ function parse(txt) {
       const p = l.split("|").map(s => s.trim());
       const m = p[0].match(/^(\d+):(\d+(?:\.\d+)?)$/);
       if (!m) return null;
+
+      const pal = (p[2] || "").split(/\s+/).filter(c => /^#[0-9a-fA-F]{3,8}$/.test(c));
+      if (!pal.length) pal.push(DEFAULT_COLOR);
+
       const e = {
         t: +m[1] * 60 + +m[2],
         text: p[1] || "",
-        color: p[2] || DEFAULT_COLOR,
-        img: p[3] || "",
+        pal,
+        img: p[3] && !p[3].startsWith("#") ? p[3] : "",
         imgEl: null
       };
       if (e.img) {
@@ -203,6 +179,39 @@ function parse(txt) {
 function applyLyrics() {
   timeline = parse($("lyrics").value);
   updateSeekMax();
+}
+
+// ---------- pewarnaan teks ----------
+// 1 warna = semua huruf | jumlah warna = jumlah huruf -> per huruf | selain itu -> per kata
+function colorize(text, pal) {
+  let plain = "";
+  const hl = [];
+  text.split(/(\[[^\]]*\])/).forEach(s => {
+    if (!s) return;
+    const isH = s.startsWith("[") && s.endsWith("]");
+    for (const ch of isH ? s.slice(1, -1) : s) { plain += ch; hl.push(isH); }
+  });
+
+  const letters = plain.replace(/\s/g, "").length;
+  let li = 0, wi = -1, inWord = false, prev = pal[0];
+  const parts = [];
+  for (let i = 0; i < plain.length; i++) {
+    const ch = plain[i];
+    let c;
+    if (/\s/.test(ch)) {
+      inWord = false;
+      c = prev;
+    } else {
+      if (!inWord) { wi++; inWord = true; }
+      c = pal.length === 1 ? pal[0] : pal.length === letters ? pal[li] : pal[wi % pal.length];
+      li++;
+    }
+    if (hl[i]) c = HIGHLIGHT;
+    prev = c;
+    const last = parts[parts.length - 1];
+    if (last && last.c === c) last.s += ch; else parts.push({ s: ch, c });
+  }
+  return parts;
 }
 
 // ---------- waktu ----------
@@ -230,13 +239,7 @@ function drawEntry(e, alpha) {
   const hasImg = e.imgEl && e.imgEl.naturalWidth;
   const y = hasImg ? VH * 0.26 : VH * 0.5;
 
-  // pecah teks: [kata] = warna sorot
-  const parts = [];
-  e.text.split(/(\[[^\]]*\])/).forEach(s => {
-    if (!s) return;
-    if (s.startsWith("[")) parts.push({ s: s.slice(1, -1), c: HIGHLIGHT });
-    else parts.push({ s, c: e.color });
-  });
+  const parts = colorize(e.text, e.pal);
 
   let size = VH * 0.2;
   const setFont = () => (octx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`);
@@ -326,7 +329,7 @@ function frame() {
 
 // ---------- kontrol ----------
 function play() {
-  if (audioReady) audio.play();
+  if (audioReady) audio.play().catch(() => {});
   else clockStart = performance.now() - pausedAt * 1000;
   playing = true;
   $("play").textContent = "⏸ Jeda";
@@ -350,101 +353,23 @@ $("seek").oninput = e => {
   }
 };
 
-$("file").onchange = e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  audio.src = URL.createObjectURL(f);
-  if (playing) pause();
-};
-
 audio.addEventListener("loadedmetadata", () => { audioReady = true; updateSeekMax(); });
 audio.addEventListener("ended", () => pause());
+audio.addEventListener("error", () => {
+  const h = $("hint");
+  h.textContent = "Lagu gagal dimuat. Cek nama file lagu di repo, harus persis sama dengan AUDIO_SRC, lalu Ctrl+F5.";
+  h.style.display = "block";
+});
 
-$("edit").onclick = () => $("editor").classList.toggle("open");
-$("apply").onclick = () => { applyLyrics(); $("editor").classList.remove("open"); };
 $("full").onclick = () => {
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen();
 };
 
 addEventListener("keydown", e => {
-  if (e.target.tagName === "TEXTAREA") return;
-  if (sync) {
-    if (e.key === "Enter") { e.preventDefault(); syncMark(); }
-    if (e.key === "Backspace") { e.preventDefault(); syncUndo(); }
-    return;
-  }
   if (e.code === "Space") { e.preventDefault(); playing ? pause() : play(); }
-  if (e.key.toLowerCase() === "e") $("editor").classList.toggle("open");
   if (e.key.toLowerCase() === "f") $("full").click();
 });
-
-
-// ---------- sync ketuk ----------
-let sync = null;
-const pad2 = n => String(n).padStart(2, "0");
-const stamp = t => pad2(Math.floor(t / 60)) + ":" + (t % 60).toFixed(1).padStart(4, "0");
-
-function showHint() {
-  const h = $("hint");
-  if (!sync) { h.style.display = "none"; return; }
-  const L = sync.lines[sync.i];
-  h.style.display = "block";
-  h.textContent = `SYNC ${sync.i + 1}/${sync.lines.length} - tekan Enter / ketuk saat mulai: "${L.text}"`;
-}
-
-function startSync() {
-  const lines = $("lyrics").value.split("\n")
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith("//"))
-    .map(l => {
-      const p = l.split("|").map(s => s.trim());
-      if (/^\d+:\d+/.test(p[0])) return { text: p[1] || "", color: p[2] || "", img: p[3] || "" };
-      return { text: l, color: "", img: "" };
-    })
-    .filter(l => l.text);
-  if (!lines.length) return;
-  sync = { lines, i: 0, out: [] };
-  $("editor").classList.remove("open");
-  if (document.activeElement) document.activeElement.blur();
-  if (playing) pause();
-  if (audioReady) audio.currentTime = 0; else pausedAt = 0;
-  timeline = [];
-  play();
-  showHint();
-}
-
-function syncMark() {
-  if (!sync) return;
-  const L = sync.lines[sync.i];
-  let row = stamp(now()) + " | " + L.text;
-  if (L.color || L.img) row += " | " + (L.color || DEFAULT_COLOR) + (L.img ? " | " + L.img : "");
-  sync.out.push(row);
-  sync.i++;
-  if (sync.i >= sync.lines.length) finishSync(); else showHint();
-}
-
-function syncUndo() {
-  if (!sync || sync.i === 0) return;
-  sync.i--;
-  sync.out.pop();
-  showHint();
-}
-
-function finishSync() {
-  const out = sync.out;
-  sync = null;
-  showHint();
-  pause();
-  $("lyrics").value =
-    "// Hasil sync. Boleh diedit manual: menit:detik | teks | warna | gambar\n" + out.join("\n");
-  if (audioReady) audio.currentTime = 0; else pausedAt = 0;
-  applyLyrics();
-  $("editor").classList.add("open");
-}
-
-$("syncbtn").onclick = startSync;
-view.addEventListener("pointerdown", () => { if (sync) syncMark(); });
 
 // ---------- mulai ----------
 if (AUDIO_SRC) audio.src = AUDIO_SRC;
