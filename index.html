@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASCII Image Visualizer</title>
+<title>ASCII Lyric Visualizer</title>
 
 <style>
 :root {
@@ -13,352 +12,443 @@
   --accent: #d9d2bd;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-body {
+html, body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
   background: var(--bg);
   color: var(--fg);
   font-family: Consolas, "Courier New", monospace;
+  overflow: hidden;
+}
+
+canvas#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
   display: flex;
-  flex-direction: column;
+  gap: 8px;
   align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-h1 {
-  font-size: clamp(18px, 3vw, 27px);
-  letter-spacing: 3px;
-  text-align: center;
-}
-
-.subtitle {
-  color: #777;
-  font-size: 12px;
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.controls {
-  display: flex;
+  padding: 10px 12px;
+  background: linear-gradient(transparent, rgba(0,0,0,.9));
+  z-index: 5;
   flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  margin-bottom: 18px;
 }
 
-button, .upload {
-  background: #171717;
-  color: var(--fg);
-  border: 1px solid #444;
-  padding: 10px 14px;
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: 5px;
-}
-
-button:hover, .upload:hover {
-  background: #333;
-}
-
-input[type="file"] {
-  display: none;
-}
-
-.settings {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-  justify-content: center;
-  color: #aaa;
-  font-size: 12px;
-  margin-bottom: 20px;
-}
-
-.settings label {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-}
-
-select, input[type="range"] {
-  accent-color: #ddd;
-}
-
-select {
+button, label.btn {
   background: #111;
-  color: white;
-  border: 1px solid #444;
-  padding: 5px;
-}
-
-#stage {
-  width: min(95vw, 760px);
-  max-height: 68vh;
-  overflow: auto;
-  background: #000;
-  border: 1px solid #292929;
-  padding: 8px 3px;
-  text-align: center;
-  box-shadow: 0 0 35px #ffffff0b;
-}
-
-#output {
-  display: inline-block;
-  white-space: pre;
-  font-family: "Courier New", monospace;
-  font-size: 6px;
-  line-height: 0.82;
-  font-weight: bold;
-  letter-spacing: 0;
   color: var(--fg);
-  text-align: left;
+  border: 1px solid #444;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
 }
+button:hover, label.btn:hover { border-color: var(--accent); color: var(--accent); }
 
-.status {
-  font-size: 11px;
-  color: #777;
-  text-align: center;
-  margin-top: 14px;
-}
+input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+input[type=file] { display: none; }
+#time { font-size: 12px; opacity: .7; min-width: 90px; }
 
-#source {
+#editor {
+  position: fixed;
+  left: 0; right: 0; bottom: 52px;
+  background: rgba(0,0,0,.92);
+  border-top: 1px solid #333;
+  padding: 12px;
+  z-index: 4;
   display: none;
+}
+#editor.open { display: block; }
+#editor textarea {
+  width: 100%;
+  height: 32vh;
+  background: #0a0a0a;
+  color: var(--fg);
+  border: 1px solid #333;
+  font: 13px/1.5 Consolas, "Courier New", monospace;
+  padding: 8px;
+  resize: vertical;
+}
+#editor small { display: block; opacity: .6; margin-top: 6px; }
+#hint {
+  position: fixed;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.8);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 4px;
+  z-index: 6;
+  display: none;
+  max-width: 92vw;
+  text-align: center;
 }
 </style>
 </head>
 
 <body>
+<canvas id="view"></canvas>
+<div id="hint"></div>
+<audio id="audio" preload="auto"></audio>
 
-<h1>ASCII VISUALIZER</h1>
-<p class="subtitle">TURN YOUR IMAGE INTO CHARACTERS</p>
-
-<div class="controls">
-  <label class="upload">
-    Choose Image
-    <input type="file" id="fileInput" accept="image/*">
-  </label>
-
-  <button id="toggleBtn">Pause Animation</button>
-  <button id="downloadBtn">Save TXT</button>
-  <button id="resetBtn">Reset</button>
+<div id="editor">
+<textarea id="lyrics" spellcheck="false">// Tempel liriknya di bawah ini, satu baris per baris, lalu klik "Sync ketuk".
+// Atau tulis manual: menit:detik | teks | warna (opsional) | gambar (opsional)
+// Kata dalam [kurung siku] memakai warna sorot.
+00:01 | ASCII [VISUALIZER] | #d9d2bd
+00:04 | Tempel lirikmu di editor | #f5f0df
+00:08 | lalu [sync] dengan lagu | #e8d44d</textarea>
+<button id="apply">Terapkan</button>
+<button id="syncbtn">Sync ketuk</button>
+<small>Gambar (png/jpg) taruh di repo yang sama, lalu tulis nama filenya di kolom ke-4.</small>
+<small>Cara cepat: tempel lirik satu baris per baris (tanpa waktu), klik "Sync ketuk", lalu tekan Enter atau ketuk layar tepat saat tiap baris mulai dinyanyikan. Backspace untuk mengulang satu baris.</small>
 </div>
 
-<div class="settings">
-  <label>
-    Detail
-    <input type="range" id="detail" min="70" max="220"
-      value="150">
+<div id="bar">
+  <button id="play">▶ Mulai</button>
+  <label class="btn">♪ Pilih lagu
+    <input type="file" id="file" accept="audio/*">
   </label>
-
-  <label>
-    Style
-    <select id="style">
-      <option value="classic">Classic</option>
-      <option value="blocks">Dense Blocks</option>
-      <option value="symbols">Symbols</option>
-    </select>
-  </label>
-
-  <label>
-    Color
-    <select id="color">
-      <option value="white">Warm White</option>
-      <option value="green">Matrix Green</option>
-      <option value="cyan">Cyan</option>
-      <option value="rainbow">Rainbow</option>
-    </select>
-  </label>
+  <input type="range" id="seek" min="0" max="100" step="0.1" value="0">
+  <span id="time">0:00</span>
+  <button id="edit">Editor (E)</button>
+  <button id="full">⛶</button>
 </div>
-
-<div id="stage">
-  <pre id="output">Choose an image to begin...</pre>
-</div>
-
-<p class="status" id="status">
-  Upload a photo to create ASCII art
-</p>
-
-<img id="source" alt="">
-<canvas id="canvas" hidden></canvas>
 
 <script>
-(() => {
-  const fileInput = document.getElementById("fileInput");
-  const source = document.getElementById("source");
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d", {
-    willReadFrequently: true
-  });
+// ====== PENGATURAN ======
+const AUDIO_SRC = "lagu.mp3";      // taruh file lagu di repo dengan nama ini (opsional)
+const DEFAULT_COLOR = "#f5f0df";   // warna teks bawaan
+const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
+const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
+const SCRAMBLE = "abcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=";
+// ========================
 
-  const output = document.getElementById("output");
-  const detail = document.getElementById("detail");
-  const style = document.getElementById("style");
-  const color = document.getElementById("color");
-  const status = document.getElementById("status");
-  const toggleBtn = document.getElementById("toggleBtn");
+const view = document.getElementById("view");
+const vctx = view.getContext("2d");
+const off = document.createElement("canvas");
+const octx = off.getContext("2d", { willReadFrequently: true });
+const audio = document.getElementById("audio");
+const $ = id => document.getElementById(id);
 
-  const characterSets = {
-    classic: "  .,:;irsXA253hMHGS#9B&@",
-    blocks: "  ░▒▓█",
-    symbols: "  .-+=*x#%@"
-  };
+let cols, rows, cw, chh, fontPx, VW, VH;
+let timeline = [];
+let audioReady = false;
+let playing = false;
+let clockStart = 0;
+let pausedAt = 0;
 
-  let animationFrame;
-  let running = true;
-  let loaded = false;
-  let phase = 0;
-  let lastRender = 0;
-  let savedText = "";
+// ---------- ukuran layar ----------
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  view.width = innerWidth * dpr;
+  view.height = innerHeight * dpr;
+  vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  function loadImage(file) {
-    if (!file || !file.type.startsWith("image/")) return;
+  fontPx = innerWidth < 600 ? 7 : 10;
+  cw = fontPx * 0.6;
+  chh = fontPx;
+  cols = Math.floor(innerWidth / cw);
+  rows = Math.floor(innerHeight / chh);
+  off.width = cols;
+  off.height = rows;
+  VW = cols;
+  VH = rows * chh / cw; // tinggi "virtual" agar huruf tidak melar
+}
+addEventListener("resize", resize);
 
-    const url = URL.createObjectURL(file);
-
-    source.onload = () => {
-      loaded = true;
-      phase = 0;
-      render();
-      status.textContent =
-        `${source.naturalWidth} × ${source.naturalHeight} | ASCII image ready`;
-      URL.revokeObjectURL(url);
-    };
-
-    source.onerror = () => {
-      status.textContent = "Unable to load this image.";
-      URL.revokeObjectURL(url);
-    };
-
-    source.src = url;
-  }
-
-  function render() {
-    if (!loaded) return;
-
-    const columns = Number(detail.value);
-    const aspect = source.naturalHeight / source.naturalWidth;
-
-    // Monospace characters are taller than they are wide.
-    const rows = Math.max(
-      1,
-      Math.round(columns * aspect * 0.48)
-    );
-
-    canvas.width = columns;
-    canvas.height = rows;
-
-    ctx.drawImage(source, 0, 0, columns, rows);
-
-    const pixels = ctx.getImageData(
-      0, 0, columns, rows
-    ).data;
-
-    const chars = characterSets[style.value];
-    const max = chars.length - 1;
-    const colorMode = color.value;
-
-    let result = "";
-
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < columns; x++) {
-        const i = (y * columns + x) * 4;
-
-        const r = pixels[i];
-        const g = pixels[i + 1];
-        const b = pixels[i + 2];
-
-        // Perceived brightness, rather than plain RGB average.
-        const brightness =
-          (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-
-        // Dark pixels use dense characters; light pixels use sparse ones.
-        const index = Math.round((1 - brightness) * max);
-        let ch = chars[index];
-
-        if (colorMode === "rainbow") {
-          const hue = (x / columns * 300 + phase * 2) % 360;
-          result += `<span style="color:hsl(${hue},65%,75%)">${ch}</span>`;
-        } else if (colorMode === "green") {
-          const level = Math.round(100 + brightness * 155);
-          result += `<span style="color:rgb(70,${level},100)">${ch}</span>`;
-        } else if (colorMode === "cyan") {
-          result += `<span style="color:rgb(${120 + brightness * 100},${200 + brightness * 55},255)">${ch}</span>`;
-        } else {
-          const level = Math.round(100 + brightness * 155);
-          result += `<span style="color:rgb(${level},${level - 2},${level - 12})">${ch}</span>`;
-        }
+// ---------- parsing lirik ----------
+function parse(txt) {
+  return txt.split("\n")
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("//"))
+    .map(l => {
+      const p = l.split("|").map(s => s.trim());
+      const m = p[0].match(/^(\d+):(\d+(?:\.\d+)?)$/);
+      if (!m) return null;
+      const e = {
+        t: +m[1] * 60 + +m[2],
+        text: p[1] || "",
+        color: p[2] || DEFAULT_COLOR,
+        img: p[3] || "",
+        imgEl: null
+      };
+      if (e.img) {
+        const im = new Image();
+        im.crossOrigin = "anonymous";
+        im.onload = () => (e.imgEl = im);
+        im.onerror = () => (e.imgEl = null);
+        im.src = e.img;
       }
+      return e;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.t - b.t);
+}
 
-      result += "\n";
-    }
+function applyLyrics() {
+  timeline = parse($("lyrics").value);
+  updateSeekMax();
+}
 
-    savedText = result.replace(/<[^>]*>/g, "");
-    output.innerHTML = result;
-    output.style.fontSize =
-      Math.max(3, Math.min(9, 900 / columns)) + "px";
+// ---------- waktu ----------
+function now() {
+  if (audioReady) return audio.currentTime;
+  return playing ? (performance.now() - clockStart) / 1000 : pausedAt;
+}
 
-    phase++;
+function duration() {
+  if (audioReady && isFinite(audio.duration)) return audio.duration;
+  const last = timeline[timeline.length - 1];
+  return last ? last.t + 5 : 30;
+}
+
+function updateSeekMax() { $("seek").max = duration(); }
+
+function fmt(s) {
+  s = Math.max(0, s);
+  return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+}
+
+// ---------- gambar teks ke canvas kecil ----------
+function drawEntry(e, alpha) {
+  octx.globalAlpha = alpha;
+  const hasImg = e.imgEl && e.imgEl.naturalWidth;
+  const y = hasImg ? VH * 0.26 : VH * 0.5;
+
+  // pecah teks: [kata] = warna sorot
+  const parts = [];
+  e.text.split(/(\[[^\]]*\])/).forEach(s => {
+    if (!s) return;
+    if (s.startsWith("[")) parts.push({ s: s.slice(1, -1), c: HIGHLIGHT });
+    else parts.push({ s, c: e.color });
+  });
+
+  let size = VH * 0.2;
+  const setFont = () => (octx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`);
+  const total = () => parts.reduce((a, p) => a + octx.measureText(p.s).width, 0);
+  setFont();
+  const maxW = VW * 0.9;
+  const w0 = total();
+  if (w0 > maxW) { size *= maxW / w0; setFont(); }
+
+  octx.textAlign = "left";
+  octx.textBaseline = "middle";
+  let x = VW / 2 - total() / 2;
+  parts.forEach(p => {
+    octx.fillStyle = p.c;
+    octx.fillText(p.s, x, y);
+    x += octx.measureText(p.s).width;
+  });
+
+  if (hasImg) {
+    const im = e.imgEl;
+    const boxW = VW * 0.8, boxH = VH * 0.5;
+    const sc = Math.min(boxW / im.naturalWidth, boxH / im.naturalHeight);
+    const iw = im.naturalWidth * sc, ih = im.naturalHeight * sc;
+    octx.drawImage(im, VW / 2 - iw / 2, VH * 0.68 - ih / 2, iw, ih);
+  }
+  octx.globalAlpha = 1;
+}
+
+// ---------- loop utama ----------
+function frame() {
+  const t = now();
+
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.fillStyle = "#000";
+  octx.fillRect(0, 0, cols, rows);
+  octx.setTransform(1, 0, 0, cw / chh, 0, 0);
+
+  let idx = -1;
+  for (let i = 0; i < timeline.length; i++) if (t >= timeline[i].t) idx = i;
+
+  let local = 99;
+  if (idx >= 0) {
+    const e = timeline[idx];
+    const next = timeline[idx + 1];
+    const end = next ? next.t : e.t + 4;
+    local = t - e.t;
+    const fadeIn = Math.min(1, local / 0.12);
+    const fadeOut = Math.min(1, (end - t) / 0.1);
+    const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
+    drawEntry(e, alpha);
   }
 
-  function animate(time) {
-    if (running && loaded && time - lastRender > 120) {
-      render();
-      lastRender = time;
-    }
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  const data = octx.getImageData(0, 0, cols, rows).data;
 
-    animationFrame = requestAnimationFrame(animate);
+  vctx.fillStyle = "#000";
+  vctx.fillRect(0, 0, innerWidth, innerHeight);
+  vctx.font = `${fontPx}px Consolas, "Courier New", monospace`;
+  vctx.textBaseline = "top";
+
+  let lastColor = "";
+  const decode = local < 0.5 ? local / 0.5 : 1; // efek "terurai" saat baris baru muncul
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = (y * cols + x) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const lum = Math.max(r, g, b) / 255;
+      if (lum < 0.07) continue;
+
+      let ch = RAMP[Math.min(RAMP.length - 1, Math.floor(lum * RAMP.length))];
+      if (Math.random() > decode) ch = SCRAMBLE[(Math.random() * SCRAMBLE.length) | 0];
+      else if (Math.random() < 0.015) ch = RAMP[Math.max(1, RAMP.length - 2 - ((Math.random() * 3) | 0))];
+
+      const col = `rgb(${r},${g},${b})`;
+      if (col !== lastColor) { vctx.fillStyle = col; lastColor = col; }
+      vctx.fillText(ch, x * cw, y * chh);
+    }
   }
 
-  fileInput.addEventListener("change", e => {
-    loadImage(e.target.files[0]);
-  });
+  // UI waktu
+  $("time").textContent = fmt(t) + " / " + fmt(duration());
+  if (document.activeElement !== $("seek")) $("seek").value = t;
 
-  detail.addEventListener("input", render);
-  style.addEventListener("change", render);
-  color.addEventListener("change", render);
+  requestAnimationFrame(frame);
+}
 
-  toggleBtn.addEventListener("click", () => {
-    running = !running;
-    toggleBtn.textContent = running
-      ? "Pause Animation"
-      : "Play Animation";
-  });
+// ---------- kontrol ----------
+function play() {
+  if (audioReady) audio.play();
+  else clockStart = performance.now() - pausedAt * 1000;
+  playing = true;
+  $("play").textContent = "⏸ Jeda";
+}
 
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    loaded = false;
-    source.removeAttribute("src");
-    fileInput.value = "";
-    output.textContent = "Choose an image to begin...";
-    status.textContent = "Upload a photo to create ASCII art";
-    savedText = "";
-  });
+function pause() {
+  if (audioReady) audio.pause();
+  else pausedAt = (performance.now() - clockStart) / 1000;
+  playing = false;
+  $("play").textContent = "▶ Mulai";
+}
 
-  document.getElementById("downloadBtn").addEventListener("click", () => {
-    if (!savedText) {
-      status.textContent = "Choose an image first.";
-      return;
-    }
+$("play").onclick = () => (playing ? pause() : play());
 
-    const blob = new Blob([savedText], {
-      type: "text/plain;charset=utf-8"
-    });
+$("seek").oninput = e => {
+  const v = +e.target.value;
+  if (audioReady) audio.currentTime = v;
+  else {
+    pausedAt = v;
+    clockStart = performance.now() - v * 1000;
+  }
+};
 
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "ascii-art.txt";
-    link.click();
-    URL.revokeObjectURL(link.href);
-  });
+$("file").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  audio.src = URL.createObjectURL(f);
+  if (playing) pause();
+};
 
-  animationFrame = requestAnimationFrame(animate);
-})();
+audio.addEventListener("loadedmetadata", () => { audioReady = true; updateSeekMax(); });
+audio.addEventListener("ended", () => pause());
+
+$("edit").onclick = () => $("editor").classList.toggle("open");
+$("apply").onclick = () => { applyLyrics(); $("editor").classList.remove("open"); };
+$("full").onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen();
+};
+
+addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA") return;
+  if (sync) {
+    if (e.key === "Enter") { e.preventDefault(); syncMark(); }
+    if (e.key === "Backspace") { e.preventDefault(); syncUndo(); }
+    return;
+  }
+  if (e.code === "Space") { e.preventDefault(); playing ? pause() : play(); }
+  if (e.key.toLowerCase() === "e") $("editor").classList.toggle("open");
+  if (e.key.toLowerCase() === "f") $("full").click();
+});
+
+
+// ---------- sync ketuk ----------
+let sync = null;
+const pad2 = n => String(n).padStart(2, "0");
+const stamp = t => pad2(Math.floor(t / 60)) + ":" + (t % 60).toFixed(1).padStart(4, "0");
+
+function showHint() {
+  const h = $("hint");
+  if (!sync) { h.style.display = "none"; return; }
+  const L = sync.lines[sync.i];
+  h.style.display = "block";
+  h.textContent = `SYNC ${sync.i + 1}/${sync.lines.length} - tekan Enter / ketuk saat mulai: "${L.text}"`;
+}
+
+function startSync() {
+  const lines = $("lyrics").value.split("\n")
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("//"))
+    .map(l => {
+      const p = l.split("|").map(s => s.trim());
+      if (/^\d+:\d+/.test(p[0])) return { text: p[1] || "", color: p[2] || "", img: p[3] || "" };
+      return { text: l, color: "", img: "" };
+    })
+    .filter(l => l.text);
+  if (!lines.length) return;
+  sync = { lines, i: 0, out: [] };
+  $("editor").classList.remove("open");
+  if (document.activeElement) document.activeElement.blur();
+  if (playing) pause();
+  if (audioReady) audio.currentTime = 0; else pausedAt = 0;
+  timeline = [];
+  play();
+  showHint();
+}
+
+function syncMark() {
+  if (!sync) return;
+  const L = sync.lines[sync.i];
+  let row = stamp(now()) + " | " + L.text;
+  if (L.color || L.img) row += " | " + (L.color || DEFAULT_COLOR) + (L.img ? " | " + L.img : "");
+  sync.out.push(row);
+  sync.i++;
+  if (sync.i >= sync.lines.length) finishSync(); else showHint();
+}
+
+function syncUndo() {
+  if (!sync || sync.i === 0) return;
+  sync.i--;
+  sync.out.pop();
+  showHint();
+}
+
+function finishSync() {
+  const out = sync.out;
+  sync = null;
+  showHint();
+  pause();
+  $("lyrics").value =
+    "// Hasil sync. Boleh diedit manual: menit:detik | teks | warna | gambar\n" + out.join("\n");
+  if (audioReady) audio.currentTime = 0; else pausedAt = 0;
+  applyLyrics();
+  $("editor").classList.add("open");
+}
+
+$("syncbtn").onclick = startSync;
+view.addEventListener("pointerdown", () => { if (sync) syncMark(); });
+
+// ---------- mulai ----------
+if (AUDIO_SRC) audio.src = AUDIO_SRC;
+resize();
+applyLyrics();
+requestAnimationFrame(frame);
 </script>
-
 </body>
 </html>
