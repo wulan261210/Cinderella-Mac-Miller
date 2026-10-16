@@ -1,0 +1,364 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCII Image Visualizer</title>
+
+<style>
+:root {
+  --bg: #000;
+  --fg: #f5f0df;
+  --accent: #d9d2bd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Consolas, "Courier New", monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+h1 {
+  font-size: clamp(18px, 3vw, 27px);
+  letter-spacing: 3px;
+  text-align: center;
+}
+
+.subtitle {
+  color: #777;
+  font-size: 12px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+button, .upload {
+  background: #171717;
+  color: var(--fg);
+  border: 1px solid #444;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+button:hover, .upload:hover {
+  background: #333;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+.settings {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  justify-content: center;
+  color: #aaa;
+  font-size: 12px;
+  margin-bottom: 20px;
+}
+
+.settings label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+select, input[type="range"] {
+  accent-color: #ddd;
+}
+
+select {
+  background: #111;
+  color: white;
+  border: 1px solid #444;
+  padding: 5px;
+}
+
+#stage {
+  width: min(95vw, 760px);
+  max-height: 68vh;
+  overflow: auto;
+  background: #000;
+  border: 1px solid #292929;
+  padding: 8px 3px;
+  text-align: center;
+  box-shadow: 0 0 35px #ffffff0b;
+}
+
+#output {
+  display: inline-block;
+  white-space: pre;
+  font-family: "Courier New", monospace;
+  font-size: 6px;
+  line-height: 0.82;
+  font-weight: bold;
+  letter-spacing: 0;
+  color: var(--fg);
+  text-align: left;
+}
+
+.status {
+  font-size: 11px;
+  color: #777;
+  text-align: center;
+  margin-top: 14px;
+}
+
+#source {
+  display: none;
+}
+</style>
+</head>
+
+<body>
+
+<h1>ASCII VISUALIZER</h1>
+<p class="subtitle">TURN YOUR IMAGE INTO CHARACTERS</p>
+
+<div class="controls">
+  <label class="upload">
+    Choose Image
+    <input type="file" id="fileInput" accept="image/*">
+  </label>
+
+  <button id="toggleBtn">Pause Animation</button>
+  <button id="downloadBtn">Save TXT</button>
+  <button id="resetBtn">Reset</button>
+</div>
+
+<div class="settings">
+  <label>
+    Detail
+    <input type="range" id="detail" min="70" max="220"
+      value="150">
+  </label>
+
+  <label>
+    Style
+    <select id="style">
+      <option value="classic">Classic</option>
+      <option value="blocks">Dense Blocks</option>
+      <option value="symbols">Symbols</option>
+    </select>
+  </label>
+
+  <label>
+    Color
+    <select id="color">
+      <option value="white">Warm White</option>
+      <option value="green">Matrix Green</option>
+      <option value="cyan">Cyan</option>
+      <option value="rainbow">Rainbow</option>
+    </select>
+  </label>
+</div>
+
+<div id="stage">
+  <pre id="output">Choose an image to begin...</pre>
+</div>
+
+<p class="status" id="status">
+  Upload a photo to create ASCII art
+</p>
+
+<img id="source" alt="">
+<canvas id="canvas" hidden></canvas>
+
+<script>
+(() => {
+  const fileInput = document.getElementById("fileInput");
+  const source = document.getElementById("source");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d", {
+    willReadFrequently: true
+  });
+
+  const output = document.getElementById("output");
+  const detail = document.getElementById("detail");
+  const style = document.getElementById("style");
+  const color = document.getElementById("color");
+  const status = document.getElementById("status");
+  const toggleBtn = document.getElementById("toggleBtn");
+
+  const characterSets = {
+    classic: "  .,:;irsXA253hMHGS#9B&@",
+    blocks: "  ░▒▓█",
+    symbols: "  .-+=*x#%@"
+  };
+
+  let animationFrame;
+  let running = true;
+  let loaded = false;
+  let phase = 0;
+  let lastRender = 0;
+  let savedText = "";
+
+  function loadImage(file) {
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const url = URL.createObjectURL(file);
+
+    source.onload = () => {
+      loaded = true;
+      phase = 0;
+      render();
+      status.textContent =
+        `${source.naturalWidth} × ${source.naturalHeight} | ASCII image ready`;
+      URL.revokeObjectURL(url);
+    };
+
+    source.onerror = () => {
+      status.textContent = "Unable to load this image.";
+      URL.revokeObjectURL(url);
+    };
+
+    source.src = url;
+  }
+
+  function render() {
+    if (!loaded) return;
+
+    const columns = Number(detail.value);
+    const aspect = source.naturalHeight / source.naturalWidth;
+
+    // Monospace characters are taller than they are wide.
+    const rows = Math.max(
+      1,
+      Math.round(columns * aspect * 0.48)
+    );
+
+    canvas.width = columns;
+    canvas.height = rows;
+
+    ctx.drawImage(source, 0, 0, columns, rows);
+
+    const pixels = ctx.getImageData(
+      0, 0, columns, rows
+    ).data;
+
+    const chars = characterSets[style.value];
+    const max = chars.length - 1;
+    const colorMode = color.value;
+
+    let result = "";
+
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < columns; x++) {
+        const i = (y * columns + x) * 4;
+
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+
+        // Perceived brightness, rather than plain RGB average.
+        const brightness =
+          (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+        // Dark pixels use dense characters; light pixels use sparse ones.
+        const index = Math.round((1 - brightness) * max);
+        let ch = chars[index];
+
+        if (colorMode === "rainbow") {
+          const hue = (x / columns * 300 + phase * 2) % 360;
+          result += `<span style="color:hsl(${hue},65%,75%)">${ch}</span>`;
+        } else if (colorMode === "green") {
+          const level = Math.round(100 + brightness * 155);
+          result += `<span style="color:rgb(70,${level},100)">${ch}</span>`;
+        } else if (colorMode === "cyan") {
+          result += `<span style="color:rgb(${120 + brightness * 100},${200 + brightness * 55},255)">${ch}</span>`;
+        } else {
+          const level = Math.round(100 + brightness * 155);
+          result += `<span style="color:rgb(${level},${level - 2},${level - 12})">${ch}</span>`;
+        }
+      }
+
+      result += "\n";
+    }
+
+    savedText = result.replace(/<[^>]*>/g, "");
+    output.innerHTML = result;
+    output.style.fontSize =
+      Math.max(3, Math.min(9, 900 / columns)) + "px";
+
+    phase++;
+  }
+
+  function animate(time) {
+    if (running && loaded && time - lastRender > 120) {
+      render();
+      lastRender = time;
+    }
+
+    animationFrame = requestAnimationFrame(animate);
+  }
+
+  fileInput.addEventListener("change", e => {
+    loadImage(e.target.files[0]);
+  });
+
+  detail.addEventListener("input", render);
+  style.addEventListener("change", render);
+  color.addEventListener("change", render);
+
+  toggleBtn.addEventListener("click", () => {
+    running = !running;
+    toggleBtn.textContent = running
+      ? "Pause Animation"
+      : "Play Animation";
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    loaded = false;
+    source.removeAttribute("src");
+    fileInput.value = "";
+    output.textContent = "Choose an image to begin...";
+    status.textContent = "Upload a photo to create ASCII art";
+    savedText = "";
+  });
+
+  document.getElementById("downloadBtn").addEventListener("click", () => {
+    if (!savedText) {
+      status.textContent = "Choose an image first.";
+      return;
+    }
+
+    const blob = new Blob([savedText], {
+      type: "text/plain;charset=utf-8"
+    });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "ascii-art.txt";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+
+  animationFrame = requestAnimationFrame(animate);
+})();
+</script>
+
+</body>
+</html>
