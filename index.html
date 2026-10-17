@@ -30,7 +30,8 @@ html, body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: .45;   /* makin kecil makin gelap, ubah sesukamu */
+  opacity: .9;    /* makin kecil makin gelap, ubah sesukamu */
+  filter: brightness(1.25) contrast(1.1);
   z-index: 0;
   background: #000;
 }
@@ -42,6 +43,8 @@ canvas#view {
   height: 100%;
   display: block;
   z-index: 1;
+  /* cahaya huruf ASCII: ubah brightness / angka drop-shadow untuk lebih terang atau redup */
+  filter: brightness(1.6) drop-shadow(0 0 3px rgba(255, 248, 210, .6));
 }
 
 #bar {
@@ -142,6 +145,11 @@ const DEFAULT_COLOR = "#f5f0df";   // warna teks bawaan
 const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
 const KATA_BERGANTI = ["moment"];  // baris yang teksnya persis kata ini, warnanya berganti-ganti otomatis
 const KECEPATAN_WARNA = 6;         // makin besar makin cepat berganti
+const PAKAI_WARNA_BERAGAM = true;  // true = warna tiap baris diacak dari daftar di bawah (isi lirik tidak diubah)
+const WARNA_BERAGAM = ["#ffffff", "#e8d44d", "#f2a65a", "#f5f0df", "#ffd1a1"];
+const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "none"]; // latar tiap baris, berulang. pilihan: pita, dua, panel, none
+const TILT_DERAJAT = -4;           // kemiringan teks (minus = naik ke kanan, 0 = lurus)
+const PERSPEKTIF = 0.18;           // sisi kiri lebih besar dari kanan (0 = rata)
 const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
 const SCRAMBLE = "abcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=";
 // ========================
@@ -150,6 +158,9 @@ const view = document.getElementById("view");
 const vctx = view.getContext("2d");
 const off = document.createElement("canvas");
 const octx = off.getContext("2d", { willReadFrequently: true });
+const tcv = document.createElement("canvas");
+const tctx = tcv.getContext("2d");
+const bgs = {};
 const audio = document.getElementById("audio");
 const $ = id => document.getElementById(id);
 
@@ -174,6 +185,9 @@ function resize() {
   rows = Math.floor(innerHeight / chh);
   off.width = cols;
   off.height = rows;
+  tcv.width = cols;
+  tcv.height = rows;
+  makeBackgrounds();
   VW = cols;
   VH = rows * chh / cw; // tinggi "virtual" agar huruf tidak melar
 }
@@ -215,6 +229,13 @@ function parse(txt) {
 
 function applyLyrics() {
   timeline = parse($("lyrics").value);
+  if (PAKAI_WARNA_BERAGAM) {
+    timeline.forEach((e, i) => {
+      if (e.anim) return; // baris yang warnanya berganti-ganti tetap
+      const k = i % WARNA_BERAGAM.length;
+      e.pal = WARNA_BERAGAM.slice(k).concat(WARNA_BERAGAM.slice(0, k));
+    });
+  }
   updateSeekMax();
 }
 
@@ -272,29 +293,124 @@ function fmt(s) {
   return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 }
 
+// ---------- latar bertekstur di belakang lirik ----------
+function makeBackgrounds() {
+  const mk = fn => {
+    const c = document.createElement("canvas");
+    c.width = cols; c.height = rows;
+    fn(c.getContext("2d"));
+    return c;
+  };
+  const cell = (g, x, y, base, spread) => {
+    if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+    const k = 1 - spread * Math.random();
+    g.fillStyle = `rgb(${(base[0] * k) | 0},${(base[1] * k) | 0},${(base[2] * k) | 0})`;
+    g.fillRect(x, y, 1, 1);
+  };
+  const jag = (v, lim) => Math.max(-lim, Math.min(lim, v + (Math.random() - 0.5) * 2));
+
+  // pita lebar dengan tepi bergerigi
+  bgs.pita = mk(g => {
+    const top = rows * 0.36, bot = rows * 0.66, lim = rows * 0.05;
+    let jt = 0, jb = 0;
+    for (let x = 0; x < cols; x++) {
+      jt = jag(jt, lim); jb = jag(jb, lim);
+      for (let y = Math.floor(top + jt); y < bot + jb; y++) cell(g, x, y, [205, 172, 142], 0.45);
+    }
+  });
+
+  // dua panel kiri dan kanan, tengah gelap
+  bgs.dua = mk(g => {
+    [[0, 0.36, [190, 150, 105]], [0.66, 1, [170, 140, 120]]].forEach(([a, b, col]) => {
+      for (let x = Math.floor(cols * a); x < cols * b; x++)
+        for (let y = Math.floor(rows * 0.3); y < rows * 0.74; y++) cell(g, x, y, col, 0.5);
+    });
+  });
+
+  // panel besar di tengah
+  bgs.panel = mk(g => {
+    for (let x = Math.floor(cols * 0.12); x < cols * 0.9; x++) {
+      const fade = 1 - 0.35 * Math.abs((x / cols - 0.5) * 2);
+      for (let y = Math.floor(rows * 0.2); y < rows * 0.8; y++)
+        cell(g, x, y, [215 * fade, 195 * fade, 172 * fade], 0.3);
+    }
+  });
+}
+
 // ---------- gambar teks ke canvas kecil ----------
-function drawEntry(e, alpha) {
-  octx.globalAlpha = alpha;
+function charsOf(parts) {
+  const a = [];
+  parts.forEach(p => { for (const ch of p.s) a.push({ ch, c: p.c }); });
+  return a;
+}
+
+// pecah per kata jadi baris, ukuran dipakai untuk mengecek muat atau tidak
+function wrapLines(chars, size, maxW) {
+  tctx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`;
+  const wd = c => tctx.measureText(c.ch).width;
+  const words = [];
+  let cur = [];
+  chars.forEach(c => {
+    if (c.ch === " ") { if (cur.length) words.push(cur); cur = []; }
+    else cur.push(c);
+  });
+  if (cur.length) words.push(cur);
+
+  const space = tctx.measureText(" ").width;
+  const lines = [];
+  let line = [], lw = 0, widest = 0;
+  words.forEach(w => {
+    const ww = w.reduce((a, c) => a + wd(c), 0);
+    if (line.length && lw + space + ww > maxW) {
+      lines.push({ chars: line, w: lw });
+      widest = Math.max(widest, lw);
+      line = []; lw = 0;
+    }
+    if (line.length) { line = line.concat([{ ch: " ", c: line[line.length - 1].c }]); lw += space; }
+    line = line.concat(w);
+    lw += ww;
+  });
+  if (line.length) { lines.push({ chars: line, w: lw }); widest = Math.max(widest, lw); }
+  return { lines, widest };
+}
+
+function drawEntry(e, alpha, idx) {
+  tctx.globalAlpha = alpha;
+  const gaya = LATAR_POLA[idx % LATAR_POLA.length];
+  if (bgs[gaya]) {
+    tctx.save();
+    tctx.setTransform(1, 0, 0, 1, 0, 0);
+    tctx.drawImage(bgs[gaya], 0, 0);
+    tctx.restore();
+  }
   const hasImg = e.imgEl && e.imgEl.naturalWidth;
-  const y = hasImg ? VH * 0.26 : VH * 0.5;
+  const cy = hasImg ? VH * 0.26 : VH * 0.5;
 
   const parts = colorize(e.text, e.pal, e.anim ? Math.floor(now() * KECEPATAN_WARNA) : undefined);
+  const chars = charsOf(parts);
 
-  let size = VH * 0.2;
-  const setFont = () => (octx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`);
-  const total = () => parts.reduce((a, p) => a + octx.measureText(p.s).width, 0);
-  setFont();
-  const maxW = VW * 0.9;
-  const w0 = total();
-  if (w0 > maxW) { size *= maxW / w0; setFont(); }
+  // maksimal 2 baris, besar sebisanya
+  const maxW = VW * 0.86;
+  let size = VH * 0.2, lay;
+  for (let k = 0; k < 25; k++) {
+    lay = wrapLines(chars, size, maxW);
+    if (lay.lines.length <= 2 && lay.widest <= maxW) break;
+    size *= 0.9;
+  }
 
-  octx.textAlign = "left";
-  octx.textBaseline = "middle";
-  let x = VW / 2 - total() / 2;
-  parts.forEach(p => {
-    octx.fillStyle = p.c;
-    octx.fillText(p.s, x, y);
-    x += octx.measureText(p.s).width;
+  tctx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`;
+  tctx.textAlign = "left";
+  tctx.textBaseline = "middle";
+  const lh = size * 1.12;
+  let y = cy - (lay.lines.length - 1) * lh / 2;
+  lay.lines.forEach(L => {
+    let x = VW / 2 - L.w / 2;
+    L.chars.forEach(c => {
+      tctx.fillStyle = c.c;
+      tctx.fillText(c.ch, x, y);
+      x += tctx.measureText(c.ch).width;
+    });
+    y += lh;
   });
 
   if (hasImg) {
@@ -302,19 +418,31 @@ function drawEntry(e, alpha) {
     const boxW = VW * 0.8, boxH = VH * 0.5;
     const sc = Math.min(boxW / im.naturalWidth, boxH / im.naturalHeight);
     const iw = im.naturalWidth * sc, ih = im.naturalHeight * sc;
-    octx.drawImage(im, VW / 2 - iw / 2, VH * 0.68 - ih / 2, iw, ih);
+    tctx.drawImage(im, VW / 2 - iw / 2, VH * 0.68 - ih / 2, iw, ih);
   }
-  octx.globalAlpha = 1;
+  tctx.globalAlpha = 1;
+}
+
+// miringkan + beri perspektif: potong per kolom, geser dan skala tiap kolom
+function warp() {
+  const slope = Math.tan(TILT_DERAJAT * Math.PI / 180) * (cw / chh); // baris per kolom
+  for (let x = 0; x < cols; x++) {
+    const u = x / cols - 0.5;
+    const s = 1 - PERSPEKTIF * u;
+    const yc = rows / 2 + slope * (x - cols / 2);
+    const h = rows * s;
+    octx.drawImage(tcv, x, 0, 1, rows, x, yc - h / 2, 1, h);
+  }
 }
 
 // ---------- loop utama ----------
 function frame() {
   const t = now();
 
-  octx.setTransform(1, 0, 0, 1, 0, 0);
-  octx.fillStyle = "#000";
-  octx.fillRect(0, 0, cols, rows);
-  octx.setTransform(1, 0, 0, cw / chh, 0, 0);
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.fillStyle = "#000";
+  tctx.fillRect(0, 0, cols, rows);
+  tctx.setTransform(1, 0, 0, cw / chh, 0, 0);
 
   let idx = -1;
   for (let i = 0; i < timeline.length; i++) if (t >= timeline[i].t) idx = i;
@@ -328,10 +456,13 @@ function frame() {
     const fadeIn = Math.min(1, local / 0.12);
     const fadeOut = Math.min(1, (end - t) / 0.1);
     const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
-    drawEntry(e, alpha);
+    drawEntry(e, alpha, idx);
   }
 
   octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.fillStyle = "#000";
+  octx.fillRect(0, 0, cols, rows);
+  warp();
   const data = octx.getImageData(0, 0, cols, rows).data;
 
   // latar transparan supaya video di belakang terlihat
