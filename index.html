@@ -129,6 +129,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:42 | Come With Me | #f5f0df
 00:41 | To My | #e8d44d
 00:44 | Room | #d9d2bd
+00:45 | #e8d44d | Screenshot (191).png
 </textarea>
 
 <div id="bar">
@@ -413,12 +414,14 @@ function drawEntry(e, alpha, idx) {
     y += lh;
   });
 
-  if (hasImg) {
+ if (hasImg) {
     const im = e.imgEl;
-    const boxW = VW * 0.8, boxH = VH * 0.5;
+    const solo = !e.text; // gambar tanpa teks = tampil besar di tengah
+    const boxW = VW * (solo ? 0.9 : 0.8), boxH = VH * (solo ? 0.9 : 0.5);
+    const cyImg = VH * (solo ? 0.5 : 0.68);
     const sc = Math.min(boxW / im.naturalWidth, boxH / im.naturalHeight);
     const iw = im.naturalWidth * sc, ih = im.naturalHeight * sc;
-    tctx.drawImage(im, VW / 2 - iw / 2, VH * 0.68 - ih / 2, iw, ih);
+    tctx.drawImage(im, VW / 2 - iw / 2, cyImg - ih / 2, iw, ih);
   }
   tctx.globalAlpha = 1;
 }
@@ -451,7 +454,7 @@ function frame() {
   if (idx >= 0) {
     const e = timeline[idx];
     const next = timeline[idx + 1];
-    const end = next ? next.t : e.t + 4;
+ const end = next ? next.t : (e.img ? duration() + 1 : e.t + 4);
     local = t - e.t;
     const fadeIn = Math.min(1, local / 0.12);
     const fadeOut = Math.min(1, (end - t) / 0.1);
