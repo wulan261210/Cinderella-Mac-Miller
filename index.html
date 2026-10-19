@@ -23,14 +23,14 @@ html, body {
   overflow: hidden;
 }
 
-/* video latar di belakang ASCII */
+/* video disembunyikan (gambar hilang, suara tetap jalan) */
 #audio {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: .9;    /* makin kecil makin gelap, ubah sesukamu */
+  opacity: 0;
   filter: brightness(1.25) contrast(1.1);
   z-index: 0;
   background: #000;
@@ -465,7 +465,7 @@ function frame() {
   warp();
   const data = octx.getImageData(0, 0, cols, rows).data;
 
-  // latar transparan supaya video di belakang terlihat
+  // latar transparan (video di belakang disembunyikan lewat CSS)
   vctx.clearRect(0, 0, innerWidth, innerHeight);
   vctx.font = `${fontPx}px Consolas, "Courier New", monospace`;
   vctx.textBaseline = "top";
