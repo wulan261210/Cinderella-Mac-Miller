@@ -101,15 +101,16 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
      atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
      Baris MOMENT: seluruh kata satu warna yang berganti halus mengikuti daftar warnanya.
+     Warna pertama di daftar (pink) = saat latar MOMENT paling jelas.
      Baris gambar: kolom teks dikosongkan, nama file di kolom ke-4. -->
 <textarea id="lyrics" hidden>
 00:01 | CINDERELLA MAC-MILLER | #d9d2bd  #e8d44d CINDERELLA MAC-MILLER
 00:13 | I Been Waitin' | #e8d44d
 00:14 | All Night For This | #d9d2bd
-00:15 | MOMENT | #d9d2bd #f5f0df #e8d44d #f5f0df #d9d2bd 
+00:15 | MOMENT | #ff4fd8 #4fb3ff #ffe14d
 00:17 | I Been Waitin' | #f5f0df
 00:18 | All Year For This | #e8d44d
-00:19 | MOMENT | #d9d2bd #e8d44d #f5f0df 
+00:19 | MOMENT | #ff4fd8 #4fb3ff #ffe14d
 00:20 | I Been Picturin' | #e8d44d
 00:21 | You Takin' Off | #f5f0df
 00:22 | Your Clothes For Me | #d9d2bd #e8d44d
@@ -150,6 +151,7 @@ const KECEPATAN_WARNA = 2;         // jumlah pergantian warna per detik, makin k
 const PAKAI_WARNA_BERAGAM = true;  // true = warna tiap baris diacak dari daftar di bawah (isi lirik tidak diubah)
 const WARNA_BERAGAM = ["#ffffff", "#e8d44d", "#f2a65a", "#f5f0df", "#ffd1a1"];
 const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "none"]; // latar tiap baris, berulang. pilihan: pita, dua, panel, none
+const LATAR_MOMENT = "pita";       // latar kata MOMENT, muncul saat warnanya pink. pilihan: pita, dua, panel, none
 const TILT_DERAJAT = -4;           // kemiringan teks (minus = naik ke kanan, 0 = lurus)
 const PERSPEKTIF = 0.18;           // sisi kiri lebih besar dari kanan (0 = rata)
 const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
@@ -390,13 +392,23 @@ function wrapLines(chars, size, maxW) {
 
 function drawEntry(e, alpha, idx) {
   tctx.globalAlpha = alpha;
-  const gaya = LATAR_POLA[idx % LATAR_POLA.length];
+  let gaya = LATAR_POLA[idx % LATAR_POLA.length];
+  if (e.anim) {
+    // latar MOMENT: paling jelas saat warna pink (warna pertama di daftar), memudar saat pindah warna
+    gaya = LATAR_MOMENT;
+    const n = e.pal.length;
+    const pos = ((now() * KECEPATAN_WARNA) % n + n) % n;
+    const d = Math.min(pos, n - pos); // jarak ke warna pertama
+    tctx.globalAlpha = alpha * Math.max(0, 1 - d);
+  }
   if (bgs[gaya]) {
     tctx.save();
     tctx.setTransform(1, 0, 0, 1, 0, 0);
     tctx.drawImage(bgs[gaya], 0, 0);
     tctx.restore();
   }
+  tctx.globalAlpha = alpha;
+
   const hasImg = e.imgEl && e.imgEl.naturalWidth;
   const cy = hasImg ? VH * 0.26 : VH * 0.5;
 
