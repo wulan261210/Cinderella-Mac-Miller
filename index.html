@@ -102,14 +102,15 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Tulis  lanjut  di kolom ke-4 supaya baris itu tetap memakai gambar/video dari baris sebelumnya (tidak mulai ulang).
      Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
      Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
-     Kolom ke-6 = tengah  menaruh teks di tengah gambar/video. Tambah angka = teks baru muncul setelah sekian detik (misal pintu terbuka):
+     Kolom ke-6 = tengah  menaruh teks di tengah dan DI BELAKANG gambar/video, jadi teks hanya kelihatan lewat bagian video yang
+     kosong/transparan (misal bukaan pintu). Tambah angka = teks baru muncul setelah sekian detik (0 = langsung):
      00:45 | Room | #d9d2bd | pintu.mp4 | | tengah 1.2   (teks muncul 1,2 detik setelah baris mulai)
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
      atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
      Baris MOMENT: tanpa latar, hurufnya berganti halus dari warna ke warna sesuai daftar (mulai dari warna pertama).
      Baris gambar: kolom teks dikosongkan, nama file di kolom ke-4. -->
 <textarea id="lyrics" hidden>
-00:01 | CINDERELLA MAC-MILLER | #ffffff | | none
+00:01 | CINDERELLA MAC-MILLER | #ffffff #ffe94d | | none
 00:13 | I Been Waitin' | #e8d44d
 00:14 | All Night For This | #d9d2bd
 00:15 | MOMENT | #ff6ee8 #5ec8ff #ffe94d #ff4d4d
@@ -135,7 +136,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:41 | Take My Hand | #d9d2bd
 00:42 | Come With Me | #4dd8ff | | dua
 00:44 | To My | #e8d44d
-00:45 | Room Room Room Room | #ffe94d | pintu.mp4 | | tengah 1.2
+00:45 | Room | #ffe94d | pintu.mp4 | | tengah 1.2
 00:49 |  | #e8d44d | cover.png
 </textarea>
 
@@ -193,6 +194,7 @@ let playing = false;
 let clockStart = 0;
 let pausedAt = 0;
 let mediaAktif = false;
+let teksDiBelakang = false;
 const gagal = [];
 
 // ---------- pesan jika file gagal dimuat ----------
@@ -305,7 +307,7 @@ function applyLyrics() {
     });
   }
   if (SATU_WARNA_PER_BARIS) {
-    timeline.forEach(e => { if (!e.anim) e.pal = [e.pal[0]]; }); // ambil warna pertama saja
+    timeline.forEach(e => { if (!e.anim && !e.lock) e.pal = [e.pal[0]]; }); // ambil warna pertama saja (baris yang dikunci memakai warna tulisannya sendiri)
   }
   updateSeekMax();
 }
@@ -503,6 +505,7 @@ function drawEntry(e, alpha, idx) {
   const vid = m.vidEl && m.vidEl.videoWidth ? m.vidEl : null;
   const hasImg = vid || (m.imgEl && m.imgEl.naturalWidth);
   const tengah = hasImg && e.posisi === "tengah"; // teks di tengah gambar/video (misal di dalam pintu)
+  if (tengah) teksDiBelakang = true; // video di depan, teks di belakangnya
   const cy = tengah ? VH * TEKS_TENGAH : hasImg ? VH * TEKS_ATAS : VH * 0.5;
 
   const parts = e.anim ? colorize(e.text, e.pal, Math.max(0, now() - e.t) * KECEPATAN_WARNA) : colorize(e.text, e.pal);
@@ -580,6 +583,7 @@ function frame() {
   mctx.fillRect(0, 0, cols, rows);
   mctx.setTransform(1, 0, 0, cw / chh, 0, 0);
   mediaAktif = false;
+  teksDiBelakang = false;
 
   let idx = -1;
   for (let i = 0; i < timeline.length; i++) if (t >= timeline[i].t) idx = i;
@@ -627,14 +631,14 @@ function frame() {
       const i = (y * cols + x) * 4;
       let r = dT[i], g = dT[i + 1], b = dT[i + 2];
       let lum = Math.max(r, g, b) / 255;
-      let isText = true;
-      if (lum < 0.07) {
-        if (!dM) continue;
-        r = dM[i]; g = dM[i + 1]; b = dM[i + 2];
-        lum = Math.max(r, g, b) / 255;
-        if (lum < 0.07) continue;
-        isText = false;
+      let isText = lum >= 0.07;
+      if (dM) {
+        const mr = dM[i], mg = dM[i + 1], mb = dM[i + 2];
+        const lm = Math.max(mr, mg, mb) / 255;
+        // biasanya teks di depan video; untuk teks "tengah" video di depan dan teks hanya terlihat lewat bagian kosong
+        if (lm >= 0.07 && (teksDiBelakang || !isText)) { r = mr; g = mg; b = mb; lum = lm; isText = false; }
       }
+      if (lum < 0.07) continue;
 
       let ch = RAMP[Math.min(RAMP.length - 1, Math.floor(lum * RAMP.length))];
       if (isText && Math.random() > decode) ch = SCRAMBLE[(Math.random() * SCRAMBLE.length) | 0];
