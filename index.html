@@ -109,7 +109,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Baris MOMENT: tanpa latar, hurufnya berganti halus dari warna ke warna sesuai daftar (mulai dari warna pertama).
      Baris gambar: kolom teks dikosongkan, nama file di kolom ke-4. -->
 <textarea id="lyrics" hidden>
-00:01 | CINDERELLA MAC-MILLER | #ffffff #ffe94d | | none
+00:01 | CINDERELLA MAC-MILLER | #ffffff | | none
 00:13 | I Been Waitin' | #e8d44d
 00:14 | All Night For This | #d9d2bd
 00:15 | MOMENT | #ff6ee8 #5ec8ff #ffe94d #ff4d4d
@@ -153,6 +153,7 @@ const DEFAULT_COLOR = "#ffe94d";   // warna teks bawaan
 const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
 const KATA_BERGANTI = ["moment"];  // baris yang teksnya persis kata ini, warnanya berganti-ganti otomatis
 const KECEPATAN_WARNA = 1.2;       // kecepatan pergantian warna huruf MOMENT (1.2 = tiap warna sekitar 0,8 detik), makin kecil makin pelan
+const SATU_WARNA_PER_BARIS = true; // true = tiap lirik hanya satu warna (tidak dicampur per kata/huruf); MOMENT tetap berganti warna
 const PAKAI_WARNA_BERAGAM = true;  // true = warna tiap baris diacak dari daftar di bawah (isi lirik tidak diubah)
 const WARNA_BERAGAM = ["#ffe94d", "#ff9f43", "#ff6ee8", "#5ec8ff", "#7dff7a"]; // kuning, oranye, pink, biru muda, hijau muda
 const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "none"]; // latar tiap baris, berulang. pilihan: pita, dua, panel, none
@@ -302,6 +303,9 @@ function applyLyrics() {
       const k = i % WARNA_BERAGAM.length;
       e.pal = WARNA_BERAGAM.slice(k).concat(WARNA_BERAGAM.slice(0, k));
     });
+  }
+  if (SATU_WARNA_PER_BARIS) {
+    timeline.forEach(e => { if (!e.anim) e.pal = [e.pal[0]]; }); // ambil warna pertama saja
   }
   updateSeekMax();
 }
