@@ -97,7 +97,10 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 <div id="hint"></div>
 
 <!-- LIRIK (tersembunyi, tidak tampil di halaman)
-     Format: menit:detik | teks | warna | gambar (opsional)
+     Format: menit:detik | teks | warna | gambar (opsional) | latar (opsional: pita, dua, panel, none)
+     Kolom ke-4 bisa gambar (.png/.jpg) atau video (.mp4/.webm). Video latar hijau otomatis dihilangkan hijaunya.
+     Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
+     Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
      atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
      Baris MOMENT: huruf gelap di atas pita terang, warna di daftar dipakai untuk mewarnai pita
@@ -119,8 +122,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:26 | For You | #e8d44d
 00:27 | Daddy Told You, Better Bring | #d9d2bd #e8d44d
 00:29 | Your A** Home | #f5f0df
-00:30 |  | #e8d44d | kereta.mp4
-00:31 | Cinderella | #e8d44d | 
+00:31 | Cinderella | #e8d44d | kereta.mp4
 00:32 | Better Get | #d9d2bd
 00:33 | Your A** Home | #f5f0df
 00:34 | Man, I Swear | #e8d44d
@@ -129,7 +131,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:37 | You Ain't Gotta Be | #e8d44d #d9d2bd
 00:38 | Old To Be A Man | #f5f0df #e8d44d
 00:41 | Take My Hand | #d9d2bd
-00:42 | Come With Me | #f5f0df
+00:42 | Come With Me | #e8d44d | | dua
 00:44 | To My | #e8d44d
 00:45 | Room | #d9d2bd
 00:47 |  | #e8d44d | cover.png
@@ -155,6 +157,7 @@ const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "non
 const LATAR_MOMENT = "pita";       // latar kata MOMENT. pilihan: pita, dua, panel, none
 const TERANG_MOMENT = 0.7;         // terang pita MOMENT: 0 = biasa, 1 = sangat terang
 const WARNA_TEKS_MOMENT = "#000000"; // warna huruf MOMENT (gelap supaya terbaca di atas pita terang)
+const CHROMA_KEY = true;           // true = warna hijau pada video (green screen) dibuat transparan
 const TILT_DERAJAT = -4;           // kemiringan teks (minus = naik ke kanan, 0 = lurus)
 const PERSPEKTIF = 0.18;           // sisi kiri lebih besar dari kanan (0 = rata)
 const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
@@ -219,9 +222,23 @@ function parse(txt) {
         pal,
         anim: /\bganti\b/i.test(p[2] || "") || KATA_BERGANTI.includes((p[1] || "").trim().toLowerCase()),
         img: p[3] && !p[3].startsWith("#") ? p[3] : "",
+        latar: (p[4] || "").toLowerCase(),
         imgEl: null
       };
-      if (e.img) {
+      e.lock = !!(e.img || e.latar); // warna dikunci, tidak diacak otomatis
+      e.vidEl = null;
+      if (/\.(mp4|webm|mov)$/i.test(e.img)) {
+        // video: dimuat diam-diam, diputar saat barisnya tampil
+        const v = document.createElement("video");
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.preload = "auto";
+        v.crossOrigin = "anonymous";
+        v.addEventListener("loadeddata", () => (e.vidEl = v));
+        v.addEventListener("error", () => (e.vidEl = null));
+        v.src = e.img;
+      } else if (e.img) {
         const im = new Image();
         im.crossOrigin = "anonymous";
         im.onload = () => (e.imgEl = im);
@@ -238,7 +255,7 @@ function applyLyrics() {
   timeline = parse($("lyrics").value);
   if (PAKAI_WARNA_BERAGAM) {
     timeline.forEach((e, i) => {
-      if (e.anim) return; // baris yang warnanya berganti-ganti tetap
+      if (e.anim || e.lock) return; // baris MOMENT dan baris yang dikunci tetap
       const k = i % WARNA_BERAGAM.length;
       e.pal = WARNA_BERAGAM.slice(k).concat(WARNA_BERAGAM.slice(0, k));
     });
@@ -393,9 +410,38 @@ function wrapLines(chars, size, maxW) {
   return { lines, widest };
 }
 
+// hilangkan warna hijau dari frame video (green screen)
+const kc = document.createElement("canvas");
+const kctx = kc.getContext("2d", { willReadFrequently: true });
+function keyGreen(v, iw, ih) {
+  const w = Math.max(2, Math.round(iw * 2)), h = Math.max(2, Math.round(ih * 2));
+  if (kc.width !== w) kc.width = w;
+  if (kc.height !== h) kc.height = h;
+  kctx.clearRect(0, 0, w, h);
+  kctx.drawImage(v, 0, 0, w, h);
+  const img = kctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    if (g > 90 && g > r * 1.3 && g > b * 1.3) d[i + 3] = 0;
+  }
+  kctx.putImageData(img, 0, 0);
+  return kc;
+}
+
+// putar video hanya saat barisnya tampil, ikut main/jeda
+let activeVid = null;
+function syncVideo(v) {
+  if (activeVid && activeVid !== v) { activeVid.pause(); activeVid = null; }
+  if (!v) return;
+  if (activeVid !== v) { activeVid = v; v.currentTime = 0; }
+  if (playing && v.paused) v.play().catch(() => {});
+  else if (!playing && !v.paused) v.pause();
+}
+
 function drawEntry(e, alpha, idx) {
   tctx.globalAlpha = alpha;
-  const gaya = e.anim ? LATAR_MOMENT : LATAR_POLA[idx % LATAR_POLA.length];
+  const gaya = e.anim ? LATAR_MOMENT : (e.latar || LATAR_POLA[idx % LATAR_POLA.length]);
   if (bgs[gaya]) {
     tctx.save();
     tctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -414,7 +460,8 @@ function drawEntry(e, alpha, idx) {
   }
   tctx.globalAlpha = alpha;
 
-  const hasImg = e.imgEl && e.imgEl.naturalWidth;
+  const vid = e.vidEl && e.vidEl.videoWidth ? e.vidEl : null;
+  const hasImg = vid || (e.imgEl && e.imgEl.naturalWidth);
   const cy = hasImg ? VH * 0.26 : VH * 0.5;
 
   const parts = e.anim ? colorize(e.text, [WARNA_TEKS_MOMENT]) : colorize(e.text, e.pal);
@@ -445,13 +492,16 @@ function drawEntry(e, alpha, idx) {
   });
 
   if (hasImg) {
-    const im = e.imgEl;
+    const im = vid || e.imgEl;
+    const mw = vid ? vid.videoWidth : im.naturalWidth;
+    const mh = vid ? vid.videoHeight : im.naturalHeight;
     const solo = !e.text; // gambar tanpa teks = tampil besar di tengah
     const boxW = VW * (solo ? 0.9 : 0.8), boxH = VH * (solo ? 0.9 : 0.5);
     const cyImg = VH * (solo ? 0.5 : 0.68);
-    const sc = Math.min(boxW / im.naturalWidth, boxH / im.naturalHeight);
-    const iw = im.naturalWidth * sc, ih = im.naturalHeight * sc;
-    tctx.drawImage(im, VW / 2 - iw / 2, cyImg - ih / 2, iw, ih);
+    const sc = Math.min(boxW / mw, boxH / mh);
+    const iw = mw * sc, ih = mh * sc;
+    const src = vid && CHROMA_KEY ? keyGreen(vid, iw, ih) : im;
+    tctx.drawImage(src, VW / 2 - iw / 2, cyImg - ih / 2, iw, ih);
   }
   tctx.globalAlpha = 1;
 }
@@ -481,6 +531,7 @@ function frame() {
   for (let i = 0; i < timeline.length; i++) if (t >= timeline[i].t) idx = i;
 
   let local = 99;
+  let vidNow = null;
   if (idx >= 0) {
     const e = timeline[idx];
     const next = timeline[idx + 1];
@@ -489,8 +540,10 @@ function frame() {
     const fadeIn = Math.min(1, local / 0.12);
     const fadeOut = Math.min(1, (end - t) / 0.1);
     const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
+    vidNow = e.vidEl || null;
     drawEntry(e, alpha, idx);
   }
+  syncVideo(vidNow);
 
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.fillStyle = "#000";
