@@ -102,6 +102,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Tulis  lanjut  di kolom ke-4 supaya baris itu tetap memakai gambar/video dari baris sebelumnya (tidak mulai ulang).
      Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
      Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
+     Kolom ke-6 = tengah  menaruh teks di tengah gambar/video (misal di dalam pintu): 00:45 | Room | #d9d2bd | pintu.mp4 | | tengah
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
      atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
      Baris MOMENT: tanpa latar, hurufnya berganti halus dari warna ke warna sesuai daftar (mulai dari warna pertama).
@@ -131,10 +132,10 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:37 | You Ain't Gotta Be | #e8d44d #d9d2bd
 00:38 | Old To Be A Man | #f5f0df #e8d44d
 00:41 | Take My Hand | #d9d2bd
-00:42 | Come With Me | #e8d44d 
+00:42 | Come With Me | #e8d44d | | dua
 00:44 | To My | #e8d44d
-00:45 | Room | #d9d2bd | pintu.mp4
-00:47 |  | #e8d44d | cover.png
+00:45 | Room | #d9d2bd | pintu.mp4 | | tengah
+00:49 |  | #e8d44d | cover.png
 </textarea>
 
 <div id="bar">
@@ -156,6 +157,8 @@ const WARNA_BERAGAM = ["#ffffff", "#e8d44d", "#f2a65a", "#f5f0df", "#ffd1a1"];
 const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "none"]; // latar tiap baris, berulang. pilihan: pita, dua, panel, none
 const TEKS_ATAS = 0.12;            // posisi lirik saat ada gambar/video (0 = paling atas, 0.5 = tengah)
 const UKURAN_TEKS_ATAS = 0.13;     // ukuran lirik saat ada gambar/video (makin besar makin besar hurufnya)
+const TEKS_TENGAH = 0.55;          // tinggi teks yang memakai  tengah  (0.5 = tengah layar, naikkan angkanya = teks turun)
+const UKURAN_TEKS_TENGAH = 0.16;   // ukuran huruf teks yang memakai  tengah
 const MEDIA_LEBAR = 1.0;           // lebar kotak gambar/video (1 = selebar layar)
 const MEDIA_TINGGI = 0.95;         // tinggi kotak gambar/video (1 = setinggi layar)
 const MEDIA_TENGAH = 0.55;         // posisi tengah gambar/video dari atas (0.5 = tengah layar)
@@ -238,6 +241,7 @@ function parse(txt) {
         img: p[3] && !p[3].startsWith("#") && !/^(lanjut|=)$/i.test(p[3]) ? p[3] : "",
         cont: /^(lanjut|=)$/i.test(p[3] || ""),
         latar: (p[4] || "").toLowerCase(),
+        posisi: (p[5] || "").toLowerCase(),
         imgEl: null
       };
       e.lock = !!(e.img || e.latar || e.cont); // warna dikunci, tidak diacak otomatis
@@ -492,14 +496,15 @@ function drawEntry(e, alpha, idx) {
   const m = e.dari || e; // sumber gambar/video
   const vid = m.vidEl && m.vidEl.videoWidth ? m.vidEl : null;
   const hasImg = vid || (m.imgEl && m.imgEl.naturalWidth);
-  const cy = hasImg ? VH * TEKS_ATAS : VH * 0.5;
+  const tengah = hasImg && e.posisi === "tengah"; // teks di tengah gambar/video (misal di dalam pintu)
+  const cy = tengah ? VH * TEKS_TENGAH : hasImg ? VH * TEKS_ATAS : VH * 0.5;
 
   const parts = e.anim ? colorize(e.text, e.pal, Math.max(0, now() - e.t) * KECEPATAN_WARNA) : colorize(e.text, e.pal);
   const chars = charsOf(parts);
 
   // maksimal 2 baris, besar sebisanya
   const maxW = VW * 0.86;
-  let size = VH * (hasImg ? UKURAN_TEKS_ATAS : 0.2), lay;
+  let size = VH * (tengah ? UKURAN_TEKS_TENGAH : hasImg ? UKURAN_TEKS_ATAS : 0.2), lay;
   for (let k = 0; k < 25; k++) {
     lay = wrapLines(chars, size, maxW);
     if (lay.lines.length <= 2 && lay.widest <= maxW) break;
