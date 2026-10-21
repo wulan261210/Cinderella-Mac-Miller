@@ -100,7 +100,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Format: menit:detik | teks | warna | gambar (opsional) | latar (opsional: pita, dua, panel, none)
      Kolom ke-4 bisa gambar (.png/.jpg) atau video (.mp4/.webm). Video latar hijau otomatis dihilangkan hijaunya.
      Tulis  lanjut  di kolom ke-4 supaya baris itu tetap memakai gambar/video dari baris sebelumnya (tidak mulai ulang).
-     Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
+     Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna (latar none tidak mengunci).
      Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
      Kolom ke-6 = tengah  menaruh teks di tengah gambar/video. Tambah angka = teks baru muncul setelah sekian detik (misal pintu terbuka):
      00:45 | Room | #d9d2bd | pintu.mp4 | | tengah 1.2   (teks muncul 1,2 detik setelah baris mulai)
@@ -109,7 +109,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Baris MOMENT: tanpa latar, hurufnya berganti halus dari warna ke warna sesuai daftar (mulai dari warna pertama).
      Baris gambar: kolom teks dikosongkan, nama file di kolom ke-4. -->
 <textarea id="lyrics" hidden>
-00:01 | CINDERELLA MAC-MILLER | #d9d2bd  #e8d44d CINDERELLA MAC-MILLER
+00:01 | CINDERELLA MAC-MILLER | #d9d2bd  #e8d44d CINDERELLA MAC-MILLER | | none
 00:13 | I Been Waitin' | #e8d44d
 00:14 | All Night For This | #d9d2bd
 00:15 | MOMENT | #ff6ee8 #5ec8ff #ffe94d #ff4d4d
@@ -135,7 +135,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:41 | Take My Hand | #d9d2bd
 00:42 | Come With Me | #e8d44d | | dua
 00:44 | To My | #e8d44d
-00:45 | Room | #d9d2bd | pintu.mp4 | | tengah 1.2
+00:45 | Room Room Room Room | #d9d2bd | pintu.mp4 | | tengah 1.2
 00:49 |  | #e8d44d | cover.png
 </textarea>
 
@@ -159,7 +159,7 @@ const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "non
 const TEKS_ATAS = 0.12;            // posisi lirik saat ada gambar/video (0 = paling atas, 0.5 = tengah)
 const UKURAN_TEKS_ATAS = 0.13;     // ukuran lirik saat ada gambar/video (makin besar makin besar hurufnya)
 const TEKS_TENGAH = 0.55;          // tinggi teks yang memakai  tengah  (0.5 = tengah layar, naikkan angkanya = teks turun)
-const UKURAN_TEKS_TENGAH = 0.16;   // ukuran huruf teks yang memakai  tengah
+const UKURAN_TEKS_TENGAH = 0.26;   // ukuran huruf teks yang memakai  tengah
 const MEDIA_LEBAR = 1.0;           // lebar kotak gambar/video (1 = selebar layar)
 const MEDIA_TINGGI = 0.95;         // tinggi kotak gambar/video (1 = setinggi layar)
 const MEDIA_TENGAH = 0.55;         // posisi tengah gambar/video dari atas (0.5 = tengah layar)
@@ -246,7 +246,7 @@ function parse(txt) {
         tunda: parseFloat(((p[5] || "").split(/\s+/)[1] || "0")) || 0, // teks baru muncul setelah sekian detik
         imgEl: null
       };
-      e.lock = !!(e.img || e.latar || e.cont); // warna dikunci, tidak diacak otomatis
+      e.lock = !!(e.img || e.cont || (e.latar && e.latar !== "none")); // warna dikunci, tidak diacak otomatis
       e.vidEl = null;
       if (/\.(mp4|webm|mov)$/i.test(e.img)) {
         // video: dimuat diam-diam, diputar saat barisnya tampil
