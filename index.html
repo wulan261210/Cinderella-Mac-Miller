@@ -99,6 +99,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 <!-- LIRIK (tersembunyi, tidak tampil di halaman)
      Format: menit:detik | teks | warna | gambar (opsional) | latar (opsional: pita, dua, panel, none)
      Kolom ke-4 bisa gambar (.png/.jpg) atau video (.mp4/.webm). Video latar hijau otomatis dihilangkan hijaunya.
+     Tulis  lanjut  di kolom ke-4 supaya baris itu tetap memakai gambar/video dari baris sebelumnya (tidak mulai ulang).
      Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
      Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
@@ -123,8 +124,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:27 | Daddy Told You, Better Bring | #d9d2bd #e8d44d
 00:29 | Your A** Home | #f5f0df
 00:31 | Cinderella | #e8d44d | kereta.mp4
-00:32 | Better Get | #d9d2bd
-00:33 | Your A** Home | #f5f0df
+00:32 | Better Get | #d9d2bd | lanjut
+00:33 | Your A** Home | #f5f0df | lanjut
 00:34 | Man, I Swear | #e8d44d
 00:35 | That Parents | #d9d2bd
 00:36 | Just Dont Understand | #f5f0df
@@ -157,6 +158,11 @@ const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "non
 const LATAR_MOMENT = "pita";       // latar kata MOMENT. pilihan: pita, dua, panel, none
 const TERANG_MOMENT = 0.7;         // terang pita MOMENT: 0 = biasa, 1 = sangat terang
 const WARNA_TEKS_MOMENT = "#000000"; // warna huruf MOMENT (gelap supaya terbaca di atas pita terang)
+const TEKS_ATAS = 0.12;            // posisi lirik saat ada gambar/video (0 = paling atas, 0.5 = tengah)
+const UKURAN_TEKS_ATAS = 0.13;     // ukuran lirik saat ada gambar/video (makin besar makin besar hurufnya)
+const MEDIA_LEBAR = 0.95;          // lebar gambar/video (1 = selebar layar)
+const MEDIA_TINGGI = 0.78;         // tinggi maksimal gambar/video (1 = setinggi layar)
+const MEDIA_TENGAH = 0.60;         // posisi tengah gambar/video dari atas (0.5 = tengah layar)
 const CHROMA_KEY = true;           // true = warna hijau pada video (green screen) dibuat transparan
 const TILT_DERAJAT = -4;           // kemiringan teks (minus = naik ke kanan, 0 = lurus)
 const PERSPEKTIF = 0.18;           // sisi kiri lebih besar dari kanan (0 = rata)
@@ -221,11 +227,12 @@ function parse(txt) {
         text: p[1] || "",
         pal,
         anim: /\bganti\b/i.test(p[2] || "") || KATA_BERGANTI.includes((p[1] || "").trim().toLowerCase()),
-        img: p[3] && !p[3].startsWith("#") ? p[3] : "",
+        img: p[3] && !p[3].startsWith("#") && !/^(lanjut|=)$/i.test(p[3]) ? p[3] : "",
+        cont: /^(lanjut|=)$/i.test(p[3] || ""),
         latar: (p[4] || "").toLowerCase(),
         imgEl: null
       };
-      e.lock = !!(e.img || e.latar); // warna dikunci, tidak diacak otomatis
+      e.lock = !!(e.img || e.latar || e.cont); // warna dikunci, tidak diacak otomatis
       e.vidEl = null;
       if (/\.(mp4|webm|mov)$/i.test(e.img)) {
         // video: dimuat diam-diam, diputar saat barisnya tampil
@@ -253,6 +260,12 @@ function parse(txt) {
 
 function applyLyrics() {
   timeline = parse($("lyrics").value);
+  let sumber = null; // baris "lanjut" memakai gambar/video dari baris sebelumnya
+  timeline.forEach(e => {
+    if (e.img) sumber = e;
+    else if (e.cont) e.dari = sumber;
+    else sumber = null;
+  });
   if (PAKAI_WARNA_BERAGAM) {
     timeline.forEach((e, i) => {
       if (e.anim || e.lock) return; // baris MOMENT dan baris yang dikunci tetap
@@ -460,16 +473,17 @@ function drawEntry(e, alpha, idx) {
   }
   tctx.globalAlpha = alpha;
 
-  const vid = e.vidEl && e.vidEl.videoWidth ? e.vidEl : null;
-  const hasImg = vid || (e.imgEl && e.imgEl.naturalWidth);
-  const cy = hasImg ? VH * 0.26 : VH * 0.5;
+  const m = e.dari || e; // sumber gambar/video
+  const vid = m.vidEl && m.vidEl.videoWidth ? m.vidEl : null;
+  const hasImg = vid || (m.imgEl && m.imgEl.naturalWidth);
+  const cy = hasImg ? VH * TEKS_ATAS : VH * 0.5;
 
   const parts = e.anim ? colorize(e.text, [WARNA_TEKS_MOMENT]) : colorize(e.text, e.pal);
   const chars = charsOf(parts);
 
   // maksimal 2 baris, besar sebisanya
   const maxW = VW * 0.86;
-  let size = VH * 0.2, lay;
+  let size = VH * (hasImg ? UKURAN_TEKS_ATAS : 0.2), lay;
   for (let k = 0; k < 25; k++) {
     lay = wrapLines(chars, size, maxW);
     if (lay.lines.length <= 2 && lay.widest <= maxW) break;
@@ -492,12 +506,12 @@ function drawEntry(e, alpha, idx) {
   });
 
   if (hasImg) {
-    const im = vid || e.imgEl;
+    const im = vid || m.imgEl;
     const mw = vid ? vid.videoWidth : im.naturalWidth;
     const mh = vid ? vid.videoHeight : im.naturalHeight;
     const solo = !e.text; // gambar tanpa teks = tampil besar di tengah
-    const boxW = VW * (solo ? 0.9 : 0.8), boxH = VH * (solo ? 0.9 : 0.5);
-    const cyImg = VH * (solo ? 0.5 : 0.68);
+    const boxW = VW * (solo ? 0.9 : MEDIA_LEBAR), boxH = VH * (solo ? 0.9 : MEDIA_TINGGI);
+    const cyImg = VH * (solo ? 0.5 : MEDIA_TENGAH);
     const sc = Math.min(boxW / mw, boxH / mh);
     const iw = mw * sc, ih = mh * sc;
     const src = vid && CHROMA_KEY ? keyGreen(vid, iw, ih) : im;
@@ -540,7 +554,7 @@ function frame() {
     const fadeIn = Math.min(1, local / 0.12);
     const fadeOut = Math.min(1, (end - t) / 0.1);
     const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
-    vidNow = e.vidEl || null;
+    vidNow = (e.dari || e).vidEl || null;
     drawEntry(e, alpha, idx);
   }
   syncVideo(vidNow);
