@@ -107,6 +107,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Kolom ke-6 = tengah  menaruh teks di tengah dan DI BELAKANG gambar/video, jadi teks hanya kelihatan lewat bagian video yang
      kosong/transparan (misal bukaan pintu). Tambah angka = teks baru muncul setelah sekian detik (0 = langsung):
      00:45 | Room | #d9d2bd | pintu.mp4 | | tengah 1.2   (teks muncul 1,2 detik setelah baris mulai)
+     Latar pita/dua/panel di kolom ke-5 otomatis diwarnai sesuai warna tulisannya (satu warna, versi lebih gelap supaya huruf menonjol).
      Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
      atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
      Baris MOMENT: tanpa latar, hurufnya berganti halus dari warna ke warna sesuai daftar (mulai dari warna pertama).
@@ -124,7 +125,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:22 | Your Clothes For Me | #d9d2bd #e8d44d
 00:24 | I Been Literally | #e8d44d
 00:25 | Curvin' All These Hoes | #f5f0df
-00:26 | For You | #e8d44d
+00:26 | For You | #ff6ee8 | | pita
 00:27 | Daddy Told You, Better Bring | #d9d2bd #e8d44d
 00:29 | Your A** Home | #f5f0df
 00:31 | Cinderella | #ffe94d | kereta.mp4
@@ -135,8 +136,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:36 | Just Dont Understand | #f5f0df
 00:37 | You Ain't Gotta Be | #e8d44d #d9d2bd
 00:38 | Old To Be A Man | #f5f0df #e8d44d
-00:41 | Take My Hand | #ff9f43 | tangan.mp4 | | depan x2
-00:42 | Come With Me | #4dd8ff | lanjut | | depan  x2
+00:41 | Take My Hand | #ff9f43 | pintu.mp4 | | depan x2
+00:42 | Come With Me | #4dd8ff | lanjut | | depan
 00:44 | To My | #e8d44d
 00:45 | Room | #ffe94d | pintu.mp4 | | tengah 1.2
 00:49 |  | #e8d44d | cover.png
@@ -156,6 +157,13 @@ const DEFAULT_COLOR = "#ffe94d";   // warna teks bawaan
 const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
 const KATA_BERGANTI = ["moment"];  // baris yang teksnya persis kata ini, warnanya berganti-ganti otomatis
 const KECEPATAN_WARNA = 1.2;       // kecepatan pergantian warna huruf MOMENT (1.2 = tiap warna sekitar 0,8 detik), makin kecil makin pelan
+const FONT_MOMENT = [              // gaya huruf MOMENT, berganti tiap warnanya ganti ({u} = ukuran, jangan dihapus)
+  '700 {u}px "Segoe UI", Arial, sans-serif',               // tebal
+  '400 {u}px "Segoe UI", Arial, sans-serif',               // biasa
+  'italic 700 {u}px Georgia, "Times New Roman", serif',    // tebal miring berkaki
+  '400 {u}px "Courier New", Consolas, monospace'           // mesin tik
+];
+const GELAP_LATAR = 0.55;         // kecerahan latar berwarna (0.3 = gelap, 0.8 = terang)
 const SATU_WARNA_PER_BARIS = true; // true = tiap lirik hanya satu warna (tidak dicampur per kata/huruf); MOMENT tetap berganti warna
 const PAKAI_WARNA_BERAGAM = true;  // true = warna tiap baris diacak dari daftar di bawah (isi lirik tidak diubah)
 const WARNA_BERAGAM = ["#ffe94d", "#ff9f43", "#ff6ee8", "#5ec8ff", "#7dff7a"]; // kuning, oranye, pink, biru muda, hijau muda
@@ -436,9 +444,13 @@ function charsOf(parts) {
   return a;
 }
 
+// font yang dipakai saat ini (berganti-ganti untuk MOMENT)
+const fontBiasa = u => `700 ${u}px "Segoe UI", Arial, sans-serif`;
+let fontFn = fontBiasa;
+
 // pecah per kata jadi baris, ukuran dipakai untuk mengecek muat atau tidak
 function wrapLines(chars, size, maxW) {
-  tctx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`;
+  tctx.font = fontFn(size);
   const wd = c => tctx.measureText(c.ch).width;
   const words = [];
   let cur = [];
@@ -505,6 +517,17 @@ function drawEntry(e, alpha, idx) {
     tctx.save();
     tctx.setTransform(1, 0, 0, 1, 0, 0);
     tctx.drawImage(bgs[gaya], 0, 0);
+    if (e.latar && e.latar !== "none") {
+      // cerahkan dulu, lalu warnai dengan warna tulisan (versi lebih gelap) supaya latar senada dan huruf menonjol
+      const hx = parseInt((e.pal[0] || "#ffffff").slice(1, 7), 16);
+      tctx.globalCompositeOperation = "lighter";
+      tctx.globalAlpha = alpha * 0.8;
+      tctx.drawImage(bgs[gaya], 0, 0);
+      tctx.globalAlpha = alpha;
+      tctx.globalCompositeOperation = "multiply";
+      tctx.fillStyle = `rgb(${((hx >> 16) & 255) * GELAP_LATAR | 0},${((hx >> 8) & 255) * GELAP_LATAR | 0},${(hx & 255) * GELAP_LATAR | 0})`;
+      tctx.fillRect(0, 0, cols, rows);
+    }
     tctx.restore();
   }
   tctx.globalAlpha = alpha;
@@ -517,6 +540,9 @@ function drawEntry(e, alpha, idx) {
   const depan = hasImg && e.posisi === "depan"; // teks di tengah layar, di depan video
   const cy = tengah ? VH * TEKS_TENGAH : depan ? VH * 0.5 : hasImg ? VH * TEKS_ATAS : VH * 0.5;
 
+  // MOMENT: gaya huruf berganti tiap warna berganti
+  const langkah = Math.floor(Math.max(0, now() - e.t) * KECEPATAN_WARNA);
+  fontFn = e.anim ? (u => FONT_MOMENT[langkah % FONT_MOMENT.length].replace("{u}", u)) : fontBiasa;
   const parts = e.anim ? colorize(e.text, e.pal, Math.max(0, now() - e.t) * KECEPATAN_WARNA) : colorize(e.text, e.pal);
   const chars = charsOf(parts);
 
@@ -529,7 +555,7 @@ function drawEntry(e, alpha, idx) {
     size *= 0.9;
   }
 
-  tctx.font = `700 ${size}px "Segoe UI", Arial, sans-serif`;
+  tctx.font = fontFn(size);
   tctx.textAlign = "left";
   tctx.textBaseline = "middle";
   const lh = size * 1.12;
