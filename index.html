@@ -102,6 +102,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
      Tulis  lanjut  di kolom ke-4 supaya baris itu tetap memakai gambar/video dari baris sebelumnya (tidak mulai ulang).
      Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
      Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
+     Kolom ke-6 boleh ditambah  x2  (atau x1.5, x3) = video diputar lebih cepat sekian kali, misal: | | depan x2
      Kolom ke-6 = depan  menaruh teks di tengah layar dan DI DEPAN gambar/video (video jadi latar di belakang lirik).
      Kolom ke-6 = tengah  menaruh teks di tengah dan DI BELAKANG gambar/video, jadi teks hanya kelihatan lewat bagian video yang
      kosong/transparan (misal bukaan pintu). Tambah angka = teks baru muncul setelah sekian detik (0 = langsung):
@@ -134,8 +135,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:36 | Just Dont Understand | #f5f0df
 00:37 | You Ain't Gotta Be | #e8d44d #d9d2bd
 00:38 | Old To Be A Man | #f5f0df #e8d44d
-00:41 | Take My Hand | #ff9f43 | tangan.mp4 | | depan
-00:42 | Come With Me | #4dd8ff | lanjut | | depan
+00:41 | Take My Hand | #ff9f43 | pintu.mp4 | | depan x2
+00:42 | Come With Me | #4dd8ff | lanjut | | depan  x2
 00:44 | To My | #e8d44d
 00:45 | Room | #ffe94d | pintu.mp4 | | tengah 1.2
 00:49 |  | #e8d44d | cover.png
@@ -241,6 +242,7 @@ function parse(txt) {
       const pal = (p[2] || "").split(/\s+/).filter(c => /^#[0-9a-fA-F]{3,8}$/.test(c));
       if (!pal.length) pal.push(DEFAULT_COLOR);
 
+      const opsi = (p[5] || "").toLowerCase().split(/\s+/).filter(Boolean); // contoh: tengah 1.2   atau   depan x2
       const e = {
         t: +m[1] * 60 + +m[2],
         text: p[1] || "",
@@ -249,8 +251,9 @@ function parse(txt) {
         img: p[3] && !p[3].startsWith("#") && !/^(lanjut|=)$/i.test(p[3]) ? p[3] : "",
         cont: /^(lanjut|=)$/i.test(p[3] || ""),
         latar: (p[4] || "").toLowerCase(),
-        posisi: (p[5] || "").toLowerCase().split(/\s+/)[0],
-        tunda: parseFloat(((p[5] || "").split(/\s+/)[1] || "0")) || 0, // teks baru muncul setelah sekian detik
+        posisi: opsi[0] || "",
+        tunda: parseFloat(opsi.find(o => /^\d+(\.\d+)?$/.test(o))) || 0, // teks baru muncul setelah sekian detik
+        laju: parseFloat((opsi.find(o => /^x\d/.test(o)) || "x1").slice(1)) || 1, // kecepatan putar video
         imgEl: null
       };
       e.lock = !!(e.img || e.latar || e.cont); // warna dikunci, tidak diacak otomatis
@@ -485,9 +488,10 @@ function keyGreen(v, iw, ih) {
 
 // putar video hanya saat barisnya tampil, ikut main/jeda
 let activeVid = null;
-function syncVideo(v) {
+function syncVideo(v, laju) {
   if (activeVid && activeVid !== v) { activeVid.pause(); activeVid = null; }
   if (!v) return;
+  if (v.playbackRate !== laju) v.playbackRate = laju;
   if (activeVid !== v) { activeVid = v; if (v.currentTime > 0.05) v.currentTime = 0; }
   if (playing && v.paused) v.play().catch(() => {});
   else if (!playing && !v.paused) v.pause();
@@ -595,6 +599,7 @@ function frame() {
 
   let local = 99;
   let vidNow = null;
+  let lajuNow = 1;
   if (idx >= 0) {
     const e = timeline[idx];
     const next = timeline[idx + 1];
@@ -604,9 +609,10 @@ function frame() {
     const fadeOut = Math.min(1, (end - t) / 0.1);
     const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
     vidNow = (e.dari || e).vidEl || null;
+    lajuNow = (e.dari || e).laju || 1;
     drawEntry(e, alpha, idx);
   }
-  syncVideo(vidNow);
+  syncVideo(vidNow, lajuNow);
 
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.fillStyle = "#000";
