@@ -158,10 +158,13 @@ const SATU_WARNA_PER_BARIS = true; // true = tiap lirik hanya satu warna (tidak 
 const PAKAI_WARNA_BERAGAM = true;  // true = warna tiap baris diacak dari daftar di bawah (isi lirik tidak diubah)
 const WARNA_BERAGAM = ["#ffe94d", "#ff9f43", "#ff6ee8", "#5ec8ff", "#7dff7a"]; // kuning, oranye, pink, biru muda, hijau muda
 const LATAR_POLA = ["pita", "none", "dua", "none", "panel", "pita", "none", "none"]; // latar tiap baris, berulang. pilihan: pita, dua, panel, none
-const TEKS_ATAS = 0.12;            // posisi lirik saat ada gambar/video (0 = paling atas, 0.5 = tengah)
-const UKURAN_TEKS_ATAS = 0.13;     // ukuran lirik saat ada gambar/video (makin besar makin besar hurufnya)
+const UKURAN_TEKS = 0.3;           // ukuran huruf lirik biasa (makin besar makin besar hurufnya; otomatis mengecil kalau baris terlalu panjang)
+const LEBAR_TEKS = 0.92;           // lebar maksimal lirik (1 = selebar layar)
+const MAKS_BARIS = 3;              // maksimal baris per lirik
+const TEKS_ATAS = 0.15;            // posisi lirik saat ada gambar/video (0 = paling atas, 0.5 = tengah)
+const UKURAN_TEKS_ATAS = 0.19;     // ukuran lirik saat ada gambar/video (makin besar makin besar hurufnya)
 const TEKS_TENGAH = 0.55;          // tinggi teks yang memakai  tengah  (0.5 = tengah layar, naikkan angkanya = teks turun)
-const UKURAN_TEKS_TENGAH = 0.26;   // ukuran huruf teks yang memakai  tengah
+const UKURAN_TEKS_TENGAH = 0.32;   // ukuran huruf teks yang memakai  tengah
 const MEDIA_LEBAR = 1.0;           // lebar kotak gambar/video (1 = selebar layar)
 const MEDIA_TINGGI = 0.95;         // tinggi kotak gambar/video (1 = setinggi layar)
 const MEDIA_TENGAH = 0.55;         // posisi tengah gambar/video dari atas (0.5 = tengah layar)
@@ -511,12 +514,12 @@ function drawEntry(e, alpha, idx) {
   const parts = e.anim ? colorize(e.text, e.pal, Math.max(0, now() - e.t) * KECEPATAN_WARNA) : colorize(e.text, e.pal);
   const chars = charsOf(parts);
 
-  // maksimal 2 baris, besar sebisanya
-  const maxW = VW * 0.86;
-  let size = VH * (tengah ? UKURAN_TEKS_TENGAH : hasImg ? UKURAN_TEKS_ATAS : 0.2), lay;
+  // besar sebisanya, mengecil otomatis kalau tidak muat
+  const maxW = VW * LEBAR_TEKS;
+  let size = VH * (tengah ? UKURAN_TEKS_TENGAH : hasImg ? UKURAN_TEKS_ATAS : UKURAN_TEKS), lay;
   for (let k = 0; k < 25; k++) {
     lay = wrapLines(chars, size, maxW);
-    if (lay.lines.length <= 2 && lay.widest <= maxW) break;
+    if (lay.lines.length <= MAKS_BARIS && lay.widest <= maxW && lay.lines.length * size * 1.12 <= VH * 0.85) break;
     size *= 0.9;
   }
 
