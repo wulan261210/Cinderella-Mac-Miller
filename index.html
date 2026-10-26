@@ -96,22 +96,6 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 <canvas id="view"></canvas>
 <div id="hint"></div>
 
-<!-- LIRIK (tersembunyi, tidak tampil di halaman)
-     Format: menit:detik | teks | warna | gambar (opsional) | latar (opsional: pita, dua, panel, none)
-     Kolom ke-4 bisa gambar (.png/.jpg) atau video (.mp4/.webm). Video latar hijau otomatis dihilangkan hijaunya.
-     Tulis  lanjut  di kolom ke-4 supaya baris itu tetap memakai gambar/video dari baris sebelumnya (tidak mulai ulang).
-     Baris yang punya gambar atau latar di kolom ke-4/5 warnanya dikunci sesuai yang ditulis di kolom warna.
-     Contoh: 00:42 | Come With Me | #e8d44d | | dua   (gambar dikosongkan, latar dua panel)
-     Kolom ke-6 boleh ditambah  x2  (atau x1.5, x3) = video diputar lebih cepat sekian kali, misal: | | depan x2
-     Kolom ke-6 = depan  menaruh teks di tengah layar dan DI DEPAN gambar/video (video jadi latar di belakang lirik).
-     Kolom ke-6 = tengah  menaruh teks di tengah dan DI BELAKANG gambar/video, jadi teks hanya kelihatan lewat bagian video yang
-     kosong/transparan (misal bukaan pintu). Tambah angka = teks baru muncul setelah sekian detik (0 = langsung):
-     00:45 | Room | #d9d2bd | pintu.mp4 | | tengah 1.2   (teks muncul 1,2 detik setelah baris mulai)
-     Latar pita/dua/panel di kolom ke-5 otomatis diwarnai sesuai warna tulisannya (satu warna, versi lebih gelap supaya huruf menonjol).
-     Warna: satu warna = semua huruf. Beberapa warna = sesuai jumlah kata,
-     atau sesuai jumlah huruf (satu warna per huruf). Kata dalam [ ] = warna sorot.
-     Baris MOMENT: tanpa latar, hurufnya berganti halus dari warna ke warna sesuai daftar (mulai dari warna pertama).
-     Baris gambar: kolom teks dikosongkan, nama file di kolom ke-4. -->
 <textarea id="lyrics" hidden>
 00:01 | CINDERELLA MAC-MILLER | #ffffff #ffe94d | | none
 00:13 | I Been Waitin' | #e8d44d
@@ -140,7 +124,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 00:42 | Come With Me | #4dd8ff | lanjut | | depan
 00:44 | To My | #e8d44d
 00:45 | Room | #ffe94d | pintu.mp4 | | tengah 1.2
-00:49 |  | #e8d44d | cover.png
+00:49 |   | #e8d44d | cover.png
 </textarea>
 
 <div id="bar">
@@ -152,49 +136,49 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 
 <script>
 // ====== PENGATURAN ======
-const AUDIO_SRC = "SnapTik_Cinderella_Mac_Miller_with_emm_macmiller.mp4"; // nama file video di repo (harus persis sama)
-const DEFAULT_COLOR = "#ffe94d";   // warna teks bawaan
-const HIGHLIGHT = "#ff4fd8";       // warna kata dalam [ ]
-const KATA_BERGANTI = ["moment"];  // baris yang teksnya persis kata ini, warnanya berganti-ganti otomatis
-const KECEPATAN_WARNA = 1.2;       // kecepatan pergantian warna huruf MOMENT (1.2 = tiap warna sekitar 0,8 detik), makin kecil makin pelan
-const FONT_MOMENT = [              // gaya huruf MOMENT, berganti tiap warnanya ganti ({u} = ukuran, jangan dihapus)
-  '700 {u}px "Segoe UI", Arial, sans-serif',               // tebal
-  '400 {u}px "Segoe UI", Arial, sans-serif',               // biasa
-  'italic 700 {u}px Georgia, "Times New Roman", serif',    // tebal miring berkaki
-  '400 {u}px "Courier New", Consolas, monospace'           // mesin tik
+const AUDIO_SRC = "SnapTik_Cinderella_Mac_Miller_with_emm_macmiller.mp4"; 
+const DEFAULT_COLOR = "#ffe94d";   
+const HIGHLIGHT = "#ff4fd8";       
+const KATA_BERGANTI = ["moment"];  
+const KECEPATAN_WARNA = 4.0;       // <-- DIUBAH JADI LEBIH CEPAT (sebelumnya 1.2)
+const FONT_MOMENT = [              
+  '700 {u}px "Segoe UI", Arial, sans-serif',            
+  '400 {u}px "Segoe UI", Arial, sans-serif',            
+  'italic 700 {u}px Georgia, "Times New Roman", serif',    
+  '400 {u}px "Courier New", Consolas, monospace'            
 ];
-const GELAP_LATAR = 0.55;         // kecerahan latar berwarna (0.3 = gelap, 0.8 = terang)
-const SATU_WARNA_PER_BARIS = true; // true = tiap lirik hanya satu warna (tidak dicampur per kata/huruf); MOMENT tetap berganti warna
-const PAKAI_WARNA_BERAGAM = true;  // true = warna tiap baris diacak dari daftar di bawah (isi lirik tidak diubah)
-const WARNA_BERAGAM = ["#ffe94d", "#ff9f43", "#ff6ee8", "#5ec8ff", "#7dff7a"]; // kuning, oranye, pink, biru muda, hijau muda
-const LATAR_POLA = ["none"];       // latar tiap baris, berulang. "none" = tanpa latar. pilihan lain: pita, dua, panel
-const UKURAN_TEKS = 0.3;           // ukuran huruf lirik biasa (makin besar makin besar hurufnya; otomatis mengecil kalau baris terlalu panjang)
-const LEBAR_TEKS = 0.92;           // lebar maksimal lirik (1 = selebar layar)
-const MAKS_BARIS = 3;              // maksimal baris per lirik
-const TEKS_ATAS = 0.15;            // posisi lirik saat ada gambar/video (0 = paling atas, 0.5 = tengah)
-const UKURAN_TEKS_ATAS = 0.19;     // ukuran lirik saat ada gambar/video (makin besar makin besar hurufnya)
-const TEKS_TENGAH = 0.55;          // tinggi teks yang memakai  tengah  (0.5 = tengah layar, naikkan angkanya = teks turun)
-const UKURAN_TEKS_TENGAH = 0.32;   // ukuran huruf teks yang memakai  tengah
-const MEDIA_LEBAR = 1.0;           // lebar kotak gambar/video (1 = selebar layar)
-const MEDIA_TINGGI = 0.95;         // tinggi kotak gambar/video (1 = setinggi layar)
-const MEDIA_TENGAH = 0.55;         // posisi tengah gambar/video dari atas (0.5 = tengah layar)
-const MEDIA_ZOOM = 1.4;            // pembesar khusus VIDEO (1 = pas kotak, 1.4 = 40% lebih besar, boleh melebihi layar)
-const CHROMA_KEY = true;           // true = warna hijau pada video (green screen) dibuat transparan
-const TILT_DERAJAT = -4;           // kemiringan teks (minus = naik ke kanan, 0 = lurus)
-const PERSPEKTIF = 0.18;           // sisi kiri lebih besar dari kanan (0 = rata)
-const RAMP = " .:-=+*#%@";         // urutan karakter dari terang lemah ke kuat
+const GELAP_LATAR = 0.55;          
+const SATU_WARNA_PER_BARIS = true; 
+const PAKAI_WARNA_BERAGAM = true;  
+const WARNA_BERAGAM = ["#ffe94d", "#ff9f43", "#ff6ee8", "#5ec8ff", "#7dff7a"]; 
+const LATAR_POLA = ["none"];       
+const UKURAN_TEKS = 0.3;           
+const LEBAR_TEKS = 0.92;           
+const MAKS_BARIS = 3;              
+const TEKS_ATAS = 0.15;            
+const UKURAN_TEKS_ATAS = 0.19;     
+const TEKS_TENGAH = 0.55;          
+const UKURAN_TEKS_TENGAH = 0.32;   
+const MEDIA_LEBAR = 1.0;           
+const MEDIA_TINGGI = 0.95;         
+const MEDIA_TENGAH = 0.55;         
+const MEDIA_ZOOM = 1.4;            
+const CHROMA_KEY = true;           
+const TILT_DERAJAT = -4;           
+const PERSPEKTIF = 0.18;           
+const RAMP = " .:-=+*#%@";         
 const SCRAMBLE = "abcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=";
 // ========================
 
 const view = document.getElementById("view");
 const vctx = view.getContext("2d");
-const off = document.createElement("canvas");   // teks setelah dimiringkan
+const off = document.createElement("canvas");   
 const octx = off.getContext("2d", { willReadFrequently: true });
-const off2 = document.createElement("canvas");  // gambar/video setelah dimiringkan
+const off2 = document.createElement("canvas");  
 const octx2 = off2.getContext("2d", { willReadFrequently: true });
-const tcv = document.createElement("canvas");   // lapisan teks
+const tcv = document.createElement("canvas");   
 const tctx = tcv.getContext("2d");
-const mcv = document.createElement("canvas");   // lapisan gambar/video (terpisah dari teks)
+const mcv = document.createElement("canvas");   
 const mctx = mcv.getContext("2d");
 const bgs = {};
 const audio = document.getElementById("audio");
@@ -210,15 +194,13 @@ let mediaAktif = false;
 let teksDiBelakang = false;
 const gagal = [];
 
-// ---------- pesan jika file gagal dimuat ----------
 function laporGagal(nama) {
   if (!gagal.includes(nama)) gagal.push(nama);
   const h = $("hint");
-  h.textContent = "Gagal memuat: " + gagal.join(", ") + ". Cek nama file di folder (harus persis sama) dan formatnya (mp4 H.264), lalu Ctrl+F5.";
+  h.textContent = "Gagal memuat: " + gagal.join(", ") + ". Cek nama file di folder dan formatnya, lalu Ctrl+F5.";
   h.style.display = "block";
 }
 
-// ---------- ukuran layar ----------
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   view.width = innerWidth * dpr;
@@ -233,11 +215,10 @@ function resize() {
   [off, off2, tcv, mcv].forEach(c => { c.width = cols; c.height = rows; });
   makeBackgrounds();
   VW = cols;
-  VH = rows * chh / cw; // tinggi "virtual" agar huruf tidak melar
+  VH = rows * chh / cw; 
 }
 addEventListener("resize", resize);
 
-// ---------- parsing lirik ----------
 function parse(txt) {
   return txt.split("\n")
     .map(l => l.trim())
@@ -250,7 +231,7 @@ function parse(txt) {
       const pal = (p[2] || "").split(/\s+/).filter(c => /^#[0-9a-fA-F]{3,8}$/.test(c));
       if (!pal.length) pal.push(DEFAULT_COLOR);
 
-      const opsi = (p[5] || "").toLowerCase().split(/\s+/).filter(Boolean); // contoh: tengah 1.2   atau   depan x2
+      const opsi = (p[5] || "").toLowerCase().split(/\s+/).filter(Boolean); 
       const e = {
         t: +m[1] * 60 + +m[2],
         text: p[1] || "",
@@ -260,14 +241,13 @@ function parse(txt) {
         cont: /^(lanjut|=)$/i.test(p[3] || ""),
         latar: (p[4] || "").toLowerCase(),
         posisi: opsi[0] || "",
-        tunda: parseFloat(opsi.find(o => /^\d+(\.\d+)?$/.test(o))) || 0, // teks baru muncul setelah sekian detik
-        laju: parseFloat((opsi.find(o => /^x\d/.test(o)) || "x1").slice(1)) || 1, // kecepatan putar video
+        tunda: parseFloat(opsi.find(o => /^\d+(\.\d+)?$/.test(o))) || 0, 
+        laju: parseFloat((opsi.find(o => /^x\d/.test(o)) || "x1").slice(1)) || 1, 
         imgEl: null
       };
-      e.lock = !!(e.img || e.latar || e.cont); // warna dikunci, tidak diacak otomatis
+      e.lock = !!(e.img || e.latar || e.cont); 
       e.vidEl = null;
       if (/\.(mp4|webm|mov)$/i.test(e.img)) {
-        // video: dimuat diam-diam, diputar saat barisnya tampil
         const v = document.createElement("video");
         v.muted = true;
         v.loop = true;
@@ -276,7 +256,6 @@ function parse(txt) {
         v.crossOrigin = "anonymous";
         v.addEventListener("loadeddata", () => {
           e.vidEl = v;
-          // pemanasan sekali supaya saat tampil langsung lancar, tidak tersendat
           v.play().then(() => {
             if (activeVid !== v) { v.pause(); v.currentTime = 0; }
           }).catch(() => {});
@@ -299,14 +278,12 @@ function parse(txt) {
 function applyLyrics() {
   timeline = parse($("lyrics").value);
 
-  // baris "lanjut" memakai gambar/video dari baris sebelumnya
   let sumber = null;
   timeline.forEach(e => {
     if (e.img) sumber = e;
     else if (e.cont && sumber) e.dari = sumber;
     else sumber = null;
   });
-  // kapan kelompok gambar/video berakhir (saat baris pertama yang bukan lanjutannya muncul)
   timeline.forEach((e, i) => {
     if (!e.img) return;
     let j = i + 1;
@@ -316,19 +293,17 @@ function applyLyrics() {
 
   if (PAKAI_WARNA_BERAGAM) {
     timeline.forEach((e, i) => {
-      if (e.anim || e.lock) return; // baris MOMENT dan baris yang dikunci tetap
+      if (e.anim || e.lock) return; 
       const k = i % WARNA_BERAGAM.length;
       e.pal = WARNA_BERAGAM.slice(k).concat(WARNA_BERAGAM.slice(0, k));
     });
   }
   if (SATU_WARNA_PER_BARIS) {
-    timeline.forEach(e => { if (!e.anim && !e.lock) e.pal = [e.pal[0]]; }); // ambil warna pertama saja (baris yang dikunci memakai warna tulisannya sendiri)
+    timeline.forEach(e => { if (!e.anim && !e.lock) e.pal = [e.pal[0]]; }); 
   }
   updateSeekMax();
 }
 
-// ---------- pewarnaan teks ----------
-// campur dua warna berurutan di daftar, pos = posisi desimal (misal 1.4 = 40% menuju warna ke-3)
 function mixColor(pal, pos) {
   const n = pal.length;
   const base = Math.floor(pos);
@@ -339,8 +314,6 @@ function mixColor(pal, pos) {
   return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 }
 
-// shift terisi = seluruh kata satu warna yang berganti halus (animasi)
-// 1 warna = semua huruf | jumlah warna = jumlah huruf -> per huruf | selain itu -> per kata
 function colorize(text, pal, shift) {
   let plain = "";
   const hl = [];
@@ -374,7 +347,6 @@ function colorize(text, pal, shift) {
   return parts;
 }
 
-// ---------- waktu ----------
 function now() {
   if (audioReady) return audio.currentTime;
   return playing ? (performance.now() - clockStart) / 1000 : pausedAt;
@@ -393,7 +365,6 @@ function fmt(s) {
   return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 }
 
-// ---------- latar bertekstur di belakang lirik ----------
 function makeBackgrounds() {
   const mk = fn => {
     const c = document.createElement("canvas");
@@ -409,7 +380,6 @@ function makeBackgrounds() {
   };
   const jag = (v, lim) => Math.max(-lim, Math.min(lim, v + (Math.random() - 0.5) * 2));
 
-  // pita lebar dengan tepi bergerigi
   bgs.pita = mk(g => {
     const top = rows * 0.36, bot = rows * 0.66, lim = rows * 0.05;
     let jt = 0, jb = 0;
@@ -419,7 +389,6 @@ function makeBackgrounds() {
     }
   });
 
-  // dua panel kiri dan kanan, tengah gelap
   bgs.dua = mk(g => {
     [[0, 0.36, [190, 150, 105]], [0.66, 1, [170, 140, 120]]].forEach(([a, b, col]) => {
       for (let x = Math.floor(cols * a); x < cols * b; x++)
@@ -427,7 +396,6 @@ function makeBackgrounds() {
     });
   });
 
-  // panel besar di tengah
   bgs.panel = mk(g => {
     for (let x = Math.floor(cols * 0.12); x < cols * 0.9; x++) {
       const fade = 1 - 0.35 * Math.abs((x / cols - 0.5) * 2);
@@ -437,18 +405,15 @@ function makeBackgrounds() {
   });
 }
 
-// ---------- gambar teks ke canvas kecil ----------
 function charsOf(parts) {
   const a = [];
   parts.forEach(p => { for (const ch of p.s) a.push({ ch, c: p.c }); });
   return a;
 }
 
-// font yang dipakai saat ini (berganti-ganti untuk MOMENT)
 const fontBiasa = u => `700 ${u}px "Segoe UI", Arial, sans-serif`;
 let fontFn = fontBiasa;
 
-// pecah per kata jadi baris, ukuran dipakai untuk mengecek muat atau tidak
 function wrapLines(chars, size, maxW) {
   tctx.font = fontFn(size);
   const wd = c => tctx.measureText(c.ch).width;
@@ -478,7 +443,6 @@ function wrapLines(chars, size, maxW) {
   return { lines, widest };
 }
 
-// hilangkan warna hijau dari frame video (green screen), ukuran dibatasi supaya ringan
 const kc = document.createElement("canvas");
 const kctx = kc.getContext("2d", { willReadFrequently: true });
 function keyGreen(v, iw, ih) {
@@ -498,7 +462,6 @@ function keyGreen(v, iw, ih) {
   return kc;
 }
 
-// putar video hanya saat barisnya tampil, ikut main/jeda
 let activeVid = null;
 function syncVideo(v, laju) {
   if (activeVid && activeVid !== v) { activeVid.pause(); activeVid = null; }
@@ -511,14 +474,13 @@ function syncVideo(v, laju) {
 
 function drawEntry(e, alpha, idx) {
   tctx.globalAlpha = alpha;
-  const adaMedia = e.img || e.cont; // baris dengan gambar/video: tanpa latar bertekstur
+  const adaMedia = e.img || e.cont; 
   const gaya = e.anim ? "none" : (e.latar || (adaMedia ? "none" : LATAR_POLA[idx % LATAR_POLA.length]));
   if (bgs[gaya]) {
     tctx.save();
     tctx.setTransform(1, 0, 0, 1, 0, 0);
     tctx.drawImage(bgs[gaya], 0, 0);
     if (e.latar && e.latar !== "none") {
-      // cerahkan dulu, lalu warnai dengan warna tulisan (versi lebih gelap) supaya latar senada dan huruf menonjol
       const hx = parseInt((e.pal[0] || "#ffffff").slice(1, 7), 16);
       tctx.globalCompositeOperation = "lighter";
       tctx.globalAlpha = alpha * 0.8;
@@ -532,21 +494,19 @@ function drawEntry(e, alpha, idx) {
   }
   tctx.globalAlpha = alpha;
 
-  const m = e.dari || e; // sumber gambar/video
+  const m = e.dari || e; 
   const vid = m.vidEl && m.vidEl.videoWidth ? m.vidEl : null;
   const hasImg = vid || (m.imgEl && m.imgEl.naturalWidth);
-  const tengah = hasImg && e.posisi === "tengah"; // teks di tengah gambar/video (misal di dalam pintu)
-  if (tengah) teksDiBelakang = true; // video di depan, teks di belakangnya
-  const depan = hasImg && e.posisi === "depan"; // teks di tengah layar, di depan video
+  const tengah = hasImg && e.posisi === "tengah"; 
+  if (tengah) teksDiBelakang = true; 
+  const depan = hasImg && e.posisi === "depan"; 
   const cy = tengah ? VH * TEKS_TENGAH : depan ? VH * 0.5 : hasImg ? VH * TEKS_ATAS : VH * 0.5;
 
-  // MOMENT: gaya huruf berganti tiap warna berganti
   const langkah = Math.floor(Math.max(0, now() - e.t) * KECEPATAN_WARNA);
   fontFn = e.anim ? (u => FONT_MOMENT[langkah % FONT_MOMENT.length].replace("{u}", u)) : fontBiasa;
   const parts = e.anim ? colorize(e.text, e.pal, Math.max(0, now() - e.t) * KECEPATAN_WARNA) : colorize(e.text, e.pal);
   const chars = charsOf(parts);
 
-  // besar sebisanya, mengecil otomatis kalau tidak muat
   const maxW = VW * LEBAR_TEKS;
   let size = VH * (tengah ? UKURAN_TEKS_TENGAH : depan ? UKURAN_TEKS : hasImg ? UKURAN_TEKS_ATAS : UKURAN_TEKS), lay;
   for (let k = 0; k < 25; k++) {
@@ -571,12 +531,11 @@ function drawEntry(e, alpha, idx) {
   });
   tctx.globalAlpha = 1;
 
-  // gambar/video digambar di lapisan sendiri, jadi tidak ikut memudar atau terurai saat lirik berganti
   if (hasImg) {
     const im = vid || m.imgEl;
     const mw = vid ? vid.videoWidth : im.naturalWidth;
     const mh = vid ? vid.videoHeight : im.naturalHeight;
-    const solo = !e.text; // gambar tanpa teks = tampil besar di tengah
+    const solo = !e.text; 
     const boxW = VW * (solo ? 0.9 : MEDIA_LEBAR), boxH = VH * (solo ? 0.9 : MEDIA_TINGGI);
     const cyImg = VH * (solo ? 0.5 : MEDIA_TENGAH);
     const sc = Math.min(boxW / mw, boxH / mh) * (vid && !solo ? MEDIA_ZOOM : 1);
@@ -590,9 +549,8 @@ function drawEntry(e, alpha, idx) {
   }
 }
 
-// miringkan + beri perspektif: potong per kolom, geser dan skala tiap kolom
 function warp(srcCv, dst) {
-  const slope = Math.tan(TILT_DERAJAT * Math.PI / 180) * (cw / chh); // baris per kolom
+  const slope = Math.tan(TILT_DERAJAT * Math.PI / 180) * (cw / chh); 
   for (let x = 0; x < cols; x++) {
     const u = x / cols - 0.5;
     const s = 1 - PERSPEKTIF * u;
@@ -602,10 +560,8 @@ function warp(srcCv, dst) {
   }
 }
 
-// kelompok huruf per warna supaya gambar lebih cepat
 const buckets = new Map();
 
-// ---------- loop utama ----------
 function frame() {
   const t = now();
 
@@ -655,12 +611,11 @@ function frame() {
     dM = octx2.getImageData(0, 0, cols, rows).data;
   }
 
-  // latar transparan (video di belakang disembunyikan lewat CSS)
   vctx.clearRect(0, 0, innerWidth, innerHeight);
   vctx.font = `${fontPx}px Consolas, "Courier New", monospace`;
   vctx.textBaseline = "top";
 
-  const decode = local < 0.5 ? local / 0.5 : 1; // efek "terurai" hanya untuk teks saat baris baru muncul
+  const decode = local < 0.5 ? local / 0.5 : 1; 
   buckets.forEach(a => (a.length = 0));
 
   for (let y = 0; y < rows; y++) {
@@ -672,7 +627,6 @@ function frame() {
       if (dM) {
         const mr = dM[i], mg = dM[i + 1], mb = dM[i + 2];
         const lm = Math.max(mr, mg, mb) / 255;
-        // biasanya teks di depan video; untuk teks "tengah" video di depan dan teks hanya terlihat lewat bagian kosong
         if (lm >= 0.07 && (teksDiBelakang || !isText)) { r = mr; g = mg; b = mb; lum = lm; isText = false; }
       }
       if (lum < 0.07) continue;
@@ -694,14 +648,12 @@ function frame() {
     for (let k = 0; k < arr.length; k += 3) vctx.fillText(arr[k + 2], arr[k], arr[k + 1]);
   });
 
-  // UI waktu
   $("time").textContent = fmt(t) + " / " + fmt(duration());
   if (document.activeElement !== $("seek")) $("seek").value = t;
 
   requestAnimationFrame(frame);
 }
 
-// ---------- kontrol ----------
 function play() {
   if (audioReady) audio.play().catch(() => {});
   else clockStart = performance.now() - pausedAt * 1000;
@@ -731,7 +683,7 @@ audio.addEventListener("loadedmetadata", () => { audioReady = true; updateSeekMa
 audio.addEventListener("ended", () => pause());
 audio.addEventListener("error", () => {
   const h = $("hint");
-  h.textContent = "Video gagal dimuat. Cek nama file video di repo, harus persis sama dengan AUDIO_SRC, lalu Ctrl+F5.";
+  h.textContent = "Video gagal dimuat. Cek nama file video di repo, lalu Ctrl+F5.";
   h.style.display = "block";
 });
 
@@ -745,7 +697,6 @@ addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "f") $("full").click();
 });
 
-// ---------- mulai ----------
 if (AUDIO_SRC) audio.src = AUDIO_SRC;
 resize();
 applyLyrics();
